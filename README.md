@@ -8,7 +8,7 @@ LLEF (pronounced ɬɛf - "hlyeff") is an LLDB plugin to make it more usable for 
 
 It uses LLDB's Python API to add extra status output and a few new commands, so that security researchers can more easily use LLDB to analyse software as it's running.
 
-![llef demo](https://foundryzero.co.uk/assets/img/llef.gif)
+![llef demo](https://foundryzero.co.uk/assets/img/llef-small.gif)
 
 ## 💻 Supported Architectures
 * x86_64
