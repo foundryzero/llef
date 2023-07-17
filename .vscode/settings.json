@@ -1,0 +1,54 @@
+{
+    "cSpell.words": [
+        "aaaabaaaca",
+        "aabacadaea",
+        "aarch",
+        "Atomatically",
+        "bitmask",
+        "Bitmasks",
+        "cmdtemplate",
+        "colour",
+        "colourify",
+        "COLOURS",
+        "cpsr",
+        "ENDC",
+        "hlyeff",
+        "inscope",
+        "libc",
+        "lldb",
+        "lldbinit",
+        "llef",
+        "pwnlib",
+        "refd",
+        "regs",
+        "rflags",
+        "ssbs",
+        "virtualx"
+    ],
+    "python.linting.flake8Enabled": true,
+    "python.linting.prospectorEnabled": true,
+    "python.linting.pycodestyleEnabled": true,
+    "python.linting.pylamaEnabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.mypyEnabled": true,
+    "python.linting.mypyArgs": [
+        "--follow-imports=silent",
+        "--ignore-missing-imports",
+        "--show-column-numbers",
+        "--no-pretty",
+        "--strict"
+    ],
+    "python.linting.pycodestyleArgs": [
+        "--max-line-length=120"
+    ],
+    "python.linting.pylamaArgs": [
+        "--max-line-length=120"
+    ],
+    "python.linting.pylintArgs": [
+        "--max-line-length=120"
+    ],
+    "python.linting.ignorePatterns": [
+        "**/de_bruijn.py",
+        "**/site-packages/**/*.py"
+    ]
+}

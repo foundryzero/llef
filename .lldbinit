@@ -1,0 +1,2 @@
+command script import llef.py
+settings set stop-disassembly-display never
