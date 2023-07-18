@@ -12,7 +12,7 @@ It uses LLDB's Python API to add extra status output and a few new commands, so 
 
 ## 💻 Supported Architectures
 * x86_64
-* aarch64
+* aarch64 / arm64
 
 ## 📓 Requirements
 * LLDB 15+ (https://apt.llvm.org/)
