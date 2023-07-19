@@ -23,6 +23,9 @@ The instructions below will install LLEF so that it is used by LLDB by default.
 1. Clone the repository.
 2. `cd <repo>`
 3. Run `./install.sh`
+4. Select automatic (overwrites `~/.lldbinit`) or manual installation.
+
+_LLDB uses AT&T disassembly syntax for x86 binaries by default. The installer provides an option to override this._
 
 ## ▶ Usage
 
