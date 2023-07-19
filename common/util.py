@@ -3,7 +3,7 @@
 import os
 from typing import List
 
-from lldb import SBError, SBFrame, SBMemoryRegionInfo, SBProcess, SBValue
+from lldb import SBError, SBFrame, SBMemoryRegionInfo, SBMemoryRegionInfoList, SBProcess, SBValue
 
 from common.constants import ALIGN, GLYPHS, MSG_TYPE, TERM_COLOURS
 
@@ -125,30 +125,30 @@ def attempt_to_read_string_from_memory(
     return ret_string
 
 
-def is_code(address: SBValue, process: SBProcess) -> bool:
+def is_code(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to code"""
     region = SBMemoryRegionInfo()
     code_bool = False
-    if process.GetMemoryRegions().GetMemoryRegionContainingAddress(address, region):
+    if regions.GetMemoryRegionContainingAddress(address, region):
         code_bool = region.IsExecutable()
     return code_bool
 
 
-def is_stack(address: SBValue, process: SBProcess) -> bool:
+def is_stack(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to the stack"""
     region = SBMemoryRegionInfo()
     stack_bool = False
-    if process.GetMemoryRegions().GetMemoryRegionContainingAddress(address, region):
+    if regions.GetMemoryRegionContainingAddress(address, region):
         if region.GetName() == "[stack]":
             stack_bool = True
     return stack_bool
 
 
-def is_heap(address: SBValue, process: SBProcess) -> bool:
+def is_heap(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to the heap"""
     region = SBMemoryRegionInfo()
     heap_bool = False
-    if process.GetMemoryRegions().GetMemoryRegionContainingAddress(address, region):
+    if regions.GetMemoryRegionContainingAddress(address, region):
         if region.GetName() == "[heap]":
             heap_bool = True
     return heap_bool
