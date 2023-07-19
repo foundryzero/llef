@@ -15,7 +15,7 @@ It uses LLDB's Python API to add extra status output and a few new commands, so 
 * aarch64 / arm64
 
 ## 📓 Requirements
-* LLDB 15+ (https://apt.llvm.org/)
+* LLDB 15+ (https://apt.llvm.org/) _On macOS this is bundled with Xcode 14.3+_
 
 ## ⚙ Installation
 The instructions below will install LLEF so that it is used by LLDB by default.
