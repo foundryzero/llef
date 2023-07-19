@@ -142,11 +142,11 @@ class StopHookHandler:
             # Register value has changed so highlight
             highlight = TERM_COLOURS.RED
 
-        if is_code(reg_value, self.process):
+        if is_code(reg_value, self.process, self.regions):
             color = TERM_COLOURS.RED
-        elif is_stack(reg_value, self.process):
+        elif is_stack(reg_value, self.process, self.regions):
             color = TERM_COLOURS.PINK
-        elif is_heap(reg_value, self.process):
+        elif is_heap(reg_value, self.process, self.regions):
             color = TERM_COLOURS.GREEN
         else:
             color = TERM_COLOURS.ENDC
@@ -312,6 +312,7 @@ class StopHookHandler:
         self.target = exe_ctx.GetTarget()
         self.thread = exe_ctx.GetThread()
         self.arch = get_arch(self.target)
+        self.regions = self.process.GetMemoryRegions()
 
         # Hack to print cursor at the top of the screen
         clear_page()
