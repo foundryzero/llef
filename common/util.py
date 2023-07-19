@@ -92,16 +92,15 @@ def get_frame_arguments(frame: SBFrame) -> str:
     args = []
     for var in variables:
         # get and format argument value
-        if var.GetValue() is None:
+        value = "???"
+        var_value = var.GetValue()
+        if var_value is None:
             value = "null"
-        elif var.GetValue():
+        elif var_value:
             try:
                 value = f"{int(var.GetValue(), 0):#x}"
             except ValueError:
-                value = "???"
-        else:
-            # Arg name identified but value lookup failed.
-            value = "???"
+                pass
         args.append(
             f"{TERM_COLOURS.YELLOW.value}{var.GetName()}{TERM_COLOURS.ENDC.value}={value}"
         )
