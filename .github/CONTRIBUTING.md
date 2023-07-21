@@ -10,7 +10,7 @@ This project and everyone participating in it is governed by the Code of Conduct
 
 ## What should I know before I get started?
 
-Take a look at the [README.md](https://github.com/foundryzero/LLEF-practice/blob/main/README.md) for more information about LLEF.
+Take a look at the [README.md](https://github.com/foundryzero/llef/blob/main/README.md) for more information about LLEF.
  
 ## How Can I Contribute?
 
@@ -18,8 +18,8 @@ Take a look at the [README.md](https://github.com/foundryzero/LLEF-practice/blob
 
 Unsure where to begin contributing to LLEF? You can start by looking through these `beginner` and `help-wanted` issues:
 
-* [Beginner issues](https://github.com/foundryzero/LLEF-practice/labels/help-wanted) - issues which should only require a few lines of code, and a test or two.
-* [Help wanted issues](https://github.com/foundryzero/LLEF-practice/labels/help-wanted) - issues which should be a bit more involved than `beginner` issues.
+* [Beginner issues](https://github.com/foundryzero/llef/labels/good%20first%20issue) - issues which should only require a few lines of code, and a test or two.
+* [Help wanted issues](https://github.com/foundryzero/llef/labels/help-wanted) - issues which should be a bit more involved than `beginner` issues.
 
 #### Pull Requests
 
@@ -29,7 +29,7 @@ The process described here has several goals:
 - Fix problems that are important to users
 - Engage the community in working toward the best possible LLEF
 
-Please follow the [styleguides](https://github.com/foundryzero/LLEF-practice/blob/main/.CONTRIBUTING/PYTHON%20STYLE.md)
+Please follow the [styleguides](https://github.com/foundryzero/llef/blob/main/.CONTRIBUTING/PYTHON%20STYLE.md)
 
 While the prerequisites above must be satisfied prior to having your pull request reviewed, the reviewer(s) may ask you to complete additional design work, tests, or other changes before your pull request can be ultimately accepted.
 
@@ -38,11 +38,11 @@ While the prerequisites above must be satisfied prior to having your pull reques
 
 #### Before Submitting A Bug Report
 
-Before submitting a bug report, please check to see if the bug has already been raised as an issue by searching [our github issues](https://github.com/foundryzero/LLEF-practice/labels/bug)
+Before submitting a bug report, please check to see if the bug has already been raised as an issue by searching [our github issues](https://github.com/foundryzero/llef/labels/bug)
 
 #### How Do I Submit A (Good) Bug Report?
 
-Bugs are tracked as GitHub issues. Please raise your bug as a GitHub issue using our [enhancement template](https://github.com/foundryzero/LLEF-practice/blob/main/.github/ISSUE_TEMPLATE/BUG%20REPORT.md).
+Bugs are tracked as GitHub issues. Please raise your bug as a GitHub issue using our [enhancement template](https://github.com/foundryzero/llef/blob/main/.github/ISSUE_TEMPLATE/BUG%20REPORT.md).
 
 Explain the problem and include additional details to help maintainers reproduce the problem:
 
@@ -58,11 +58,11 @@ This section guides you through submitting an enhancement suggestion for LLEF, i
 
 #### Before Submitting A Feature Request
 
-Before submitting a feature request, please check to see if the bug has already been raised as an issue by searching [our github issues](https://github.com/foundryzero/LLEF-practice/labels/enhancement)
+Before submitting a feature request, please check to see if the bug has already been raised as an issue by searching [our github issues](https://github.com/foundryzero/llef/labels/enhancement)
 
 #### How Do I Submit A (Good) Enhancement Suggestion?
 
-Features are tracked as GitHub issues. Please raise your bug as a GitHub issue using our [bug issue template](https://github.com/foundryzero/LLEF-practice/blob/main/.github/ISSUE_TEMPLATE/FEATURE%20REQUEST.md).
+Features are tracked as GitHub issues. Please raise your bug as a GitHub issue using our [bug issue template](https://github.com/foundryzero/llef/blob/main/.github/ISSUE_TEMPLATE/FEATURE%20REQUEST.md).
 
 * **Use a clear and descriptive title** for the issue to identify the suggestion.
 * **Provide a step-by-step description of the suggested enhancement** in as many details as possible.
