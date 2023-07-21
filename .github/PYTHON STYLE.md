@@ -15,20 +15,18 @@ All public functions and classes should be documented in the standard Python doc
 
 Private functions should ideally be documented too, for ease of maintainability. 
 
+When using type hints, it is not necessary to include the argument types in the documentation.
+
+The `sphinx-notypes` style is recommended.
+
 ```
-def function(arg1, arg2):
+def function(arg1: int, arg2: str) -> str:
 """
 This is a function
-
-Args:
-  arg1 (int): First number
-  arg2 (int): Second number
-  
-Raises:
-  ArgumentError - raised on error
-  
-Returns:
-  (int) - result of multiplication
+:param arg1: An argument
+:param arg2: Another argument
+:raises KeyError: description of error condition
+:return: The return string
 """
 ```
 
