@@ -76,7 +76,7 @@ python3 -m site --user-site
 
 Then locate the LLDB python modules location. This is typically at a location such as `/usr/lib/llvm-15/lib/python3.10/dist-packages` but depends on your python version.
 
-Finally, modify and excute the following to add the above LLDB module path into a new file `lldb.pth` in the site-packages location discovered above.
+Finally, modify and execute the following to add the above LLDB module path into a new file `lldb.pth` in the site-packages location discovered above.
 
 ```bash
 echo "/usr/lib/llvm-15/lib/python3.10/dist-packages" > ~/.local/lib/python3.10/site-packages/lldb.pth
