@@ -120,7 +120,7 @@ class StopHookHandler:
         err = SBError()
         stack_value = self.process.ReadPointerFromMemory(addr.GetValueAsUnsigned(), err)
         if err.Success():
-            line += f"0x{stack_value:015x}"
+            line += f"0x{stack_value:0{self.arch().bits // 4}x}"
         else:
             # Shouldn't happen as stack should always contain something
             line += str(err)
