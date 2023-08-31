@@ -68,7 +68,7 @@ def print_message(msg_type: MSG_TYPE, message: str) -> None:
 
 def print_instruction(line: str, color: TERM_COLOURS = TERM_COLOURS.ENDC) -> None:
     """Format anf print a line of disassembly returned from LLDB (SBFrame.disassembly)"""
-    print(f"{color.value}{line[16:]}{TERM_COLOURS.ENDC.value}")
+    print(f"{color.value}{line[line.find('0x'):]}{TERM_COLOURS.ENDC.value}")
 
 
 def get_registers(frame: SBFrame, frame_type: str) -> List[SBValue]:
