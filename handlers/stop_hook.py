@@ -240,7 +240,7 @@ class StopHookHandler:
                         # This slice notation (and the 4 below) are a buggy interaction of black and pycodestyle
                         # See: https://github.com/psf/black/issues/157
                         # fmt: off
-                        for instruction in instructions[i + 1:10]:  # noqa
+                        for instruction in instructions[i + 1:i + 6]:  # noqa
                             # fmt: on
                             print_instruction(instruction)
                     if i == 3:
