@@ -45,8 +45,9 @@ class StopHookHandler:
         For up to date documentation on args provided to this function run: `help target stop-hook add`
         """
         self.target = target
+        self.context_handler = ContextHandler(self.target.debugger)
 
     def handle_stop(self, exe_ctx: SBExecutionContext, _: SBStream) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""
 
-        ContextHandler(self.target.debugger).display_context(exe_ctx)
+        self.context_handler.display_context(exe_ctx)
