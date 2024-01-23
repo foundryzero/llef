@@ -21,11 +21,6 @@ class ContextCommand(BaseCommand):
         super().__init__()
         self.context_handler = ContextHandler(debugger)
 
-    @classmethod
-    def lldb_self_register(cls, debugger: SBDebugger, module_name: str) -> None:
-        command = f"command script add -c {module_name}.{cls.__name__} {cls.program}"
-        debugger.HandleCommand(command)
-
     @staticmethod
     def get_short_help() -> str:
         return "Usage: context\n"
