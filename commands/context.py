@@ -1,30 +1,21 @@
 """Context command class."""
-from typing import Any, Dict, Type, Optional
+from typing import Any, Dict
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
-
 from lldb import (
-    SBAddress,
     SBDebugger,
-    SBError,
     SBExecutionContext,
-    SBFrame,
-    SBProcess,
-    SBTarget,
-    SBThread,
-    SBValue,
 )
 
-from arch import get_arch
-from arch.base_arch import BaseArch
-from common.constants import GLYPHS, TERM_COLOURS
+from commands.base_command import BaseCommand
 from common.context_handler import ContextHandler
 
 
-class ContextCommand:
+class ContextCommand(BaseCommand):
     """Implements the context"""
 
     program: str = "context"
+    container = None
 
     def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
         super().__init__()
@@ -51,5 +42,9 @@ class ContextCommand:
         result: SBCommandReturnObject,
     ) -> None:
         """Handles the invocation of 'context' command"""
+
+        if not exe_ctx.frame:
+            print("Program not running")
+            return
 
         self.context_handler.display_context(exe_ctx)
