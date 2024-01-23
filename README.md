@@ -37,6 +37,14 @@ lldb-15 <optional binary to debug>
 ```
 
 ### Use commands:
+
+#### Context
+
+Refresh the LLEF GUI with:
+```
+(lldb) context
+```
+
 #### Pattern Create
 ```
 (lldb) pattern create 10
