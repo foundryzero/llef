@@ -21,6 +21,8 @@ from commands.pattern import (
     PatternCreateCommand,
     PatternSearchCommand,
 )
+from commands.context import ContextCommand
+
 from handlers.stop_hook import StopHookHandler
 
 
@@ -29,6 +31,7 @@ def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
         PatternContainer,
         PatternCreateCommand,
         PatternSearchCommand,
+        ContextCommand,
     ]
 
     handlers = [StopHookHandler]
