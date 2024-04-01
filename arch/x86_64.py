@@ -1,4 +1,5 @@
 """x86_64 architecture definition."""
+import platform
 from arch.base_arch import BaseArch
 
 
@@ -31,7 +32,7 @@ class X86_64(BaseArch):
 
     gpr_key = "general purpose"
 
-    flag_register = "rflags"
+    flag_register = "eflags" if platform.system() == "Windows" else "rflags"
 
     # Bitmasks used to extract flag bits from rflags register value
     flag_register_bit_masks = {
