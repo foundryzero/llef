@@ -15,7 +15,7 @@ from lldb import (
 )
 
 from arch import get_arch
-from arch.base_arch import BaseArch
+from arch.base_arch import BaseArch, FlagRegister
 from common.constants import GLYPHS, TERM_COLOURS
 from common.util import (
     attempt_to_read_string_from_memory,
@@ -155,25 +155,22 @@ class ContextHandler:
 
         print(line)
 
-    def print_flags_register(self, flag_register: SBValue) -> None:
+    def print_flags_register(self, flag_register: FlagRegister) -> None:
         """Format and print the contents of the flag register."""
+        flag_value = self.frame.register[flag_register.name].GetValueAsUnsigned()
 
-        if (
-            self.old_registers.get(self.arch().flag_register)
-            == flag_register.GetValueAsUnsigned()
-        ):
+        if self.old_registers.get(flag_register.name) == flag_value:
             # No change
             highlight = TERM_COLOURS.BLUE
         else:
             # Change and highlight
             highlight = TERM_COLOURS.RED
 
-        flag_value = flag_register.GetValueAsUnsigned()
-        line = f"{highlight.value}{flag_register.GetName().ljust(7)}{TERM_COLOURS.ENDC.value}: ["
+        line = f"{highlight.value}{flag_register.name.ljust(7)}{TERM_COLOURS.ENDC.value}: ["
         line += " ".join(
             [
                 name.upper() if flag_value & bitmask else name
-                for name, bitmask in self.arch().flag_register_bit_masks.items()
+                for name, bitmask in flag_register.bit_masks.items()
             ]
         )
         line += "]"
@@ -204,7 +201,9 @@ class ContextHandler:
         for reg in get_registers(self.frame, self.arch().gpr_key):
             if reg.GetName() in self.arch().gpr_registers:
                 self.print_register(reg)
-        self.print_flags_register(self.frame.register[self.arch.flag_register])
+        for flag_register in self.arch.flag_registers:
+            if self.frame.register[flag_register.name]:
+                self.print_flags_register(flag_register)
 
     def display_stack(self) -> None:
         """Print information about the contents of the top of the stack"""
