@@ -1,7 +1,15 @@
 """Base arch abstract class definition."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Dict, List
+
+
+@dataclass
+class FlagRegister:
+    """FlagRegister dataclass to store register name / bitmask associations"""
+    name: str
+    bit_masks: Dict[str, int]
 
 
 class BaseArch(ABC):
@@ -24,10 +32,5 @@ class BaseArch(ABC):
 
     @property
     @abstractmethod
-    def flag_register(self) -> str:
-        """Flag register property"""
-
-    @property
-    @abstractmethod
-    def flag_register_bit_masks(self) -> Dict[str, int]:
-        """Flag register bit mask property"""
+    def flag_registers(self) -> List[FlagRegister]:
+        """List of flag registers with associated bit masks"""

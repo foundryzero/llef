@@ -1,5 +1,5 @@
 """i386 architecture definition."""
-from arch.base_arch import BaseArch
+from arch.base_arch import BaseArch, FlagRegister
 
 
 class I386(BaseArch):
@@ -29,10 +29,8 @@ class I386(BaseArch):
 
     gpr_key = "general purpose"
 
-    flag_register = "eflags"
-
     # Bitmasks used to extract flag bits from eflags register value
-    flag_register_bit_masks = {
+    _eflags_register_bit_masks = {
         "zero": 0x40,
         "carry": 0x1,
         "parity": 0x4,
@@ -46,3 +44,7 @@ class I386(BaseArch):
         "virtual8086": 0x20000,
         "identification": 0x200000,
     }
+
+    flag_registers = [
+        FlagRegister("eflags", _eflags_register_bit_masks)
+    ]
