@@ -202,7 +202,7 @@ class ContextHandler:
             if reg.GetName() in self.arch().gpr_registers:
                 self.print_register(reg)
         for flag_register in self.arch.flag_registers:
-            if self.frame.register[flag_register.name]:
+            if self.frame.register[flag_register.name] is not None:
                 self.print_flags_register(flag_register)
 
     def display_stack(self) -> None:
