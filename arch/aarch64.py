@@ -1,6 +1,6 @@
 """aarch64 architecture definition."""
 
-from arch.base_arch import BaseArch
+from arch.base_arch import BaseArch, FlagRegister
 
 
 class Aarch64(BaseArch):
@@ -50,10 +50,8 @@ class Aarch64(BaseArch):
 
     gpr_key = "general"
 
-    flag_register = "cpsr"
-
     # Bitmasks used to extract flag bits from cpsr register value
-    flag_register_bit_masks = {
+    _cpsr_register_bit_masks = {
         "n": 0x80000000,
         "z": 0x40000000,
         "c": 0x20000000,
@@ -69,3 +67,7 @@ class Aarch64(BaseArch):
         "f": 0x40,
         "m": 0xF,
     }
+
+    flag_registers = [
+        FlagRegister("cpsr", _cpsr_register_bit_masks)
+    ]

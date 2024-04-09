@@ -1,5 +1,5 @@
 """x86_64 architecture definition."""
-from arch.base_arch import BaseArch
+from arch.base_arch import BaseArch, FlagRegister
 
 
 class X86_64(BaseArch):
@@ -31,10 +31,8 @@ class X86_64(BaseArch):
 
     gpr_key = "general purpose"
 
-    flag_register = "rflags"
-
-    # Bitmasks used to extract flag bits from rflags register value
-    flag_register_bit_masks = {
+    # Bitmasks used to extract flag bits from eflags register value
+    _eflag_register_bit_masks = {
         "zero": 0x40,
         "carry": 0x1,
         "parity": 0x4,
@@ -48,3 +46,10 @@ class X86_64(BaseArch):
         "virtualx86": 0x20000,
         "identification": 0x200000,
     }
+
+    # Whether LLDB exposes eflags or rflags varies depending on the platform
+    # rflags and eflags bit masks are identical for the lower 32-bits
+    flag_registers = [
+        FlagRegister("rflags", _eflag_register_bit_masks),
+        FlagRegister("eflags", _eflag_register_bit_masks)
+    ]
