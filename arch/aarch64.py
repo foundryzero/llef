@@ -42,6 +42,8 @@ class Aarch64(BaseArch):
         "x28",
         "x29",
         "x30",
+        "fp",
+        "lr",
         "sp",
         "pc",
     ]

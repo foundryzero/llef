@@ -14,6 +14,7 @@ It uses LLDB's Python API to add extra status output and a few new commands, so 
 * x86_64
 * arm
 * aarch64 / arm64
+* i386
 
 ## 📓 Requirements
 * LLDB 15+ (https://apt.llvm.org/) _On macOS this is bundled with Xcode 14.3+_
@@ -37,6 +38,14 @@ lldb-15 <optional binary to debug>
 ```
 
 ### Use commands:
+
+#### Context
+
+Refresh the LLEF GUI with:
+```
+(lldb) context
+```
+
 #### Pattern Create
 ```
 (lldb) pattern create 10
