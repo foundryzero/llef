@@ -223,8 +223,9 @@ class ContextHandler:
         if self.frame.disassembly:
             instructions = self.frame.disassembly.split("\n")
 
+            current_pc = hex(self.frame.GetPC())
             for i, item in enumerate(instructions):
-                if "\x1b[33m-> \x1b[0m" in item:
+                if current_pc in item:
                     print(instructions[0])
                     if i > 3:
                         print_instruction(instructions[i - 3], TERM_COLOURS.GREY)
