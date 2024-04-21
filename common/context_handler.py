@@ -17,6 +17,7 @@ from lldb import (
 from arch import get_arch
 from arch.base_arch import BaseArch, FlagRegister
 from common.constants import GLYPHS, TERM_COLOURS
+from common.settings import LLEFSettings
 from common.util import (
     attempt_to_read_string_from_memory,
     clear_page,
@@ -41,6 +42,7 @@ class ContextHandler:
     arch: Type[BaseArch]
     debugger: SBDebugger
     exe_ctx: SBExecutionContext
+    settings: LLEFSettings
 
     old_registers: Dict[str, int] = {}
 
@@ -56,6 +58,13 @@ class ContextHandler:
         For up to date documentation on args provided to this function run: `help target stop-hook add`
         """
         self.debugger = debugger
+        self.settings = LLEFSettings()
+
+    def output_line(self, line: str) -> None:
+        if self.settings.colour_output is False:
+            for term_colour in TERM_COLOURS:
+                line = line.replace(term_colour.value, "")
+        print(line)
 
     def generate_printable_line_from_pointer(
         self, pointer: SBValue, address_containing_pointer: Optional[int] = None
@@ -123,7 +132,7 @@ class ContextHandler:
         line += self.generate_printable_line_from_pointer(
             stack_value, addr.GetValueAsUnsigned()
         )
-        print(line)
+        self.output_line(line)
 
     def print_register(self, register: SBValue) -> None:
         """Print details of a @register"""
@@ -153,7 +162,7 @@ class ContextHandler:
 
         line += self.generate_printable_line_from_pointer(reg_value)
 
-        print(line)
+        self.output_line(line)
 
     def print_flags_register(self, flag_register: FlagRegister) -> None:
         """Format and print the contents of the flag register."""
@@ -174,7 +183,7 @@ class ContextHandler:
             ]
         )
         line += "]"
-        print(line)
+        self.output_line(line)
 
     def update_registers(self) -> None:
         """This updates the cached registers, which are used to track which registered have changed."""
@@ -185,7 +194,7 @@ class ContextHandler:
     def print_legend(self) -> None:
         """Print a line containing the color legend"""
 
-        print(
+        self.output_line(
             f"[ Legend: "
             f"{TERM_COLOURS.RED.value}Modified register{TERM_COLOURS.ENDC.value} | "
             f"{TERM_COLOURS.RED.value}Code{TERM_COLOURS.ENDC.value} | "
@@ -226,7 +235,7 @@ class ContextHandler:
             current_pc = hex(self.frame.GetPC())
             for i, item in enumerate(instructions):
                 if current_pc in item:
-                    print(instructions[0])
+                    self.output_line(instructions[0])
                     if i > 3:
                         print_instruction(instructions[i - 3], TERM_COLOURS.GREY)
                         print_instruction(instructions[i - 2], TERM_COLOURS.GREY)
@@ -295,7 +304,7 @@ class ContextHandler:
 
             line += get_frame_arguments(current_frame)
 
-            print(line)
+            self.output_line(line)
 
     def display_context(
         self,
