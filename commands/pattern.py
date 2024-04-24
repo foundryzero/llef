@@ -2,7 +2,6 @@
 
 import argparse
 import binascii
-import inspect
 import os
 import shlex
 from typing import Any, Dict, Type
@@ -23,20 +22,6 @@ class PatternContainer(BaseContainer):
     """Creates a container for the Pattern command. Sub commands are implemented in inner classes"""
 
     container_verb: str = "pattern"
-
-    @classmethod
-    def lldb_self_register(cls, debugger: SBDebugger, module_name: str) -> None:
-        container_command = (
-            f'command container add -h "{cls.get_long_help()}" -H '
-            + f'"{cls.get_short_help()}" {cls.container_verb}'
-        )
-        debugger.HandleCommand(container_command)
-
-        for _, member_cls in inspect.getmembers(cls):
-            if inspect.isclass(member_cls) and callable(
-                getattr(member_cls, "lldb_self_register", None)
-            ):
-                member_cls.lldb_self_register(debugger, cls, module_name)
 
     @staticmethod
     def get_short_help() -> str:
