@@ -18,7 +18,39 @@ class LLEFSettings(metaclass=Singleton):
     def colour_output(self):
         return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "colour_output", fallback=True)
 
+    @classmethod
+    def _get_setting_names(cls):
+        return [name for name, value in vars(cls).items() if isinstance(value, property)]
+
     def __init__(self):
+        self.load()
+
+    def validate_settings(self, setting=None) -> bool:
+        settings_names = LLEFSettings._get_setting_names()
+
+        if setting:
+            if setting not in settings_names:
+                print(f"Invalid LLEF setting {setting}")
+                return False
+            settings_names = [setting]
+
+        valid = True
+        for setting_name in settings_names:
+            try:
+                getattr(self, setting_name)
+            except ValueError:
+                valid = False
+                raw_value = self._RAW_CONFIG.get(GLOBAL_SECTION, setting_name)
+                print(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
+        return valid
+
+    def load(self, reset=False):
+        """
+        Load settings from file
+        """
+        if reset:
+            self._RAW_CONFIG = configparser.ConfigParser()
+
         if not os.path.isfile(LLEF_CONFIG_PATH):
             return
 
@@ -28,6 +60,25 @@ class LLEFSettings(metaclass=Singleton):
 
         if not self._RAW_CONFIG.has_section(GLOBAL_SECTION):
             print("Settings file missing 'LLEF' section. No settings loaded.")
+        
+        if not self.validate_settings():
+            self._RAW_CONFIG = configparser.ConfigParser()
+            print("Error parsing config. All settings set to default.")
+
+    def list(self):
+        """
+        List all settings and their current values
+        """
+        settings_names = LLEFSettings._get_setting_names()
+        for setting_name in settings_names:
+            print(f"{setting_name}={getattr(self, setting_name)}")
+
+    def save(self):
+        """
+        Save LLEF setting to file defined in `LLEF_CONFIG_PATH`
+        """
+        with open(LLEF_CONFIG_PATH, "w") as configfile:
+            self._RAW_CONFIG.write(configfile)
 
     def set(self, setting: str, value: str):
         """
@@ -36,15 +87,11 @@ class LLEFSettings(metaclass=Singleton):
         if not hasattr(self, setting):
             print(f"Invalid LLEF setting {setting}")
 
-        # TODO add type checking here otherwise an unrecoverable exception
-        # loop occurs if the wrong type is parsed from the provided string
-
+        restore_value = getattr(self, setting)
         self._RAW_CONFIG.set(GLOBAL_SECTION, setting, value)
-        print(f"Set {setting} to {getattr(self, setting)}")
 
-    def save(self):
-        """
-        Save LLEF setting to file defined in `LLEF_CONFIG_PATH`
-        """
-        with open(LLEF_CONFIG_PATH, "w") as configfile:
-            self._RAW_CONFIG.write(configfile)
+        if not self.validate_settings(setting=setting):
+            self._RAW_CONFIG.set(GLOBAL_SECTION, setting, str(restore_value))
+        else:
+            print(f"Set {setting} to {getattr(self, setting)}")
+
