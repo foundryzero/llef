@@ -4,7 +4,7 @@ import os
 
 from common.singleton import Singleton
 
-LLEF_CONFIG_PATH = f"{os.path.expanduser('~')}/.llef"
+LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef")
 GLOBAL_SECTION = "LLEF"
 
 
@@ -44,6 +44,13 @@ class LLEFSettings(metaclass=Singleton):
                 print(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
         return valid
 
+    def load_default_settings(self):
+        """
+        Reset settings and use default values
+        """
+        self._RAW_CONFIG = configparser.ConfigParser()
+        self._RAW_CONFIG.add_section(GLOBAL_SECTION)
+
     def load(self, reset=False):
         """
         Load settings from file
@@ -59,11 +66,12 @@ class LLEFSettings(metaclass=Singleton):
         self._RAW_CONFIG.read(LLEF_CONFIG_PATH)
 
         if not self._RAW_CONFIG.has_section(GLOBAL_SECTION):
-            print("Settings file missing 'LLEF' section. No settings loaded.")
-        
+            self.load_default_settings()
+            print("Settings file missing 'LLEF' section. Default settings loaded.")
+
         if not self.validate_settings():
-            self._RAW_CONFIG = configparser.ConfigParser()
-            print("Error parsing config. All settings set to default.")
+            self.load_default_settings()
+            print("Error parsing config. Default settings loaded.")
 
     def list(self):
         """
