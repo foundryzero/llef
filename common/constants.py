@@ -3,8 +3,8 @@
 from enum import Enum
 
 
-class TERM_COLOURS(Enum):
-    """Used to colourify terminal output."""
+class TERM_COLORS(Enum):
+    """Used to colorify terminal output."""
 
     BLUE = "\033[34m"
     GREEN = "\033[32m"

@@ -15,8 +15,8 @@ class LLEFSettings(metaclass=Singleton):
     _RAW_CONFIG: configparser.ConfigParser = configparser.ConfigParser()
 
     @property
-    def colour_output(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "colour_output", fallback=True)
+    def color_output(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "color_output", fallback=True)
 
     @classmethod
     def _get_setting_names(cls):

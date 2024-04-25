@@ -16,7 +16,7 @@ from lldb import (
 
 from arch import get_arch
 from arch.base_arch import BaseArch, FlagRegister
-from common.constants import GLYPHS, TERM_COLOURS
+from common.constants import GLYPHS, TERM_COLORS
 from common.settings import LLEFSettings
 from common.util import (
     attempt_to_read_string_from_memory,
@@ -61,9 +61,9 @@ class ContextHandler:
         self.settings = LLEFSettings()
 
     def output_line(self, line: str) -> None:
-        if self.settings.colour_output is False:
-            for term_colour in TERM_COLOURS:
-                line = line.replace(term_colour.value, "")
+        if self.settings.color_output is False:
+            for term_color in TERM_COLORS:
+                line = line.replace(term_color.value, "")
         print(line)
 
     def generate_printable_line_from_pointer(
@@ -83,8 +83,8 @@ class ContextHandler:
                 pointer_value.offset - pointer_value.symbol.GetStartAddress().offset
             )
             line += (
-                f" {GLYPHS.RIGHT_ARROW.value} {TERM_COLOURS.GREY.value}"
-                + f"<{pointer_value.symbol.name}+{offset}>{TERM_COLOURS.ENDC.value}"
+                f" {GLYPHS.RIGHT_ARROW.value} {TERM_COLORS.GREY.value}"
+                + f"<{pointer_value.symbol.name}+{offset}>{TERM_COLORS.ENDC.value}"
             )
 
         referenced_string = attempt_to_read_string_from_memory(
@@ -95,8 +95,8 @@ class ContextHandler:
             # Only add this to the line if there are any printable characters in refd_string
             referenced_string = referenced_string.replace("\n", " ")
             line += (
-                f' {GLYPHS.RIGHT_ARROW.value} ("{TERM_COLOURS.YELLOW.value}{referenced_string}'
-                + f'{TERM_COLOURS.ENDC.value}"?)'
+                f' {GLYPHS.RIGHT_ARROW.value} ("{TERM_COLORS.YELLOW.value}{referenced_string}'
+                + f'{TERM_COLORS.ENDC.value}"?)'
             )
 
         if address_containing_pointer is not None:
@@ -106,7 +106,7 @@ class ContextHandler:
                     registers_pointing_to_address.append(f"${register.GetName()}")
             if len(registers_pointing_to_address) > 0:
                 reg_list = ", ".join(registers_pointing_to_address)
-                line += f" {TERM_COLOURS.BLUE.value}{GLYPHS.LEFT_ARROW.value}{reg_list}"
+                line += f" {TERM_COLORS.BLUE.value}{GLYPHS.LEFT_ARROW.value}{reg_list}"
 
         return line
 
@@ -114,8 +114,8 @@ class ContextHandler:
         """Produce a printable line containing information about a given stack @addr and print it"""
         # Add stack address to line
         line = (
-            f"{TERM_COLOURS.CYAN.value}{hex(addr.GetValueAsUnsigned())}"
-            + f"{TERM_COLOURS.ENDC.value}{GLYPHS.VERTICAL_LINE.value}"
+            f"{TERM_COLORS.CYAN.value}{hex(addr.GetValueAsUnsigned())}"
+            + f"{TERM_COLORS.ENDC.value}{GLYPHS.VERTICAL_LINE.value}"
         )
         # Add offset to line
         line += f"+{offset:04x}: "
@@ -141,23 +141,23 @@ class ContextHandler:
 
         if self.old_registers.get(reg_name) == register.GetValueAsUnsigned():
             # Register value as not changed
-            highlight = TERM_COLOURS.BLUE
+            highlight = TERM_COLORS.BLUE
         else:
             # Register value has changed so highlight
-            highlight = TERM_COLOURS.RED
+            highlight = TERM_COLORS.RED
 
         if is_code(reg_value, self.process, self.regions):
-            color = TERM_COLOURS.RED
+            color = TERM_COLORS.RED
         elif is_stack(reg_value, self.process, self.regions):
-            color = TERM_COLOURS.PINK
+            color = TERM_COLORS.PINK
         elif is_heap(reg_value, self.process, self.regions):
-            color = TERM_COLOURS.GREEN
+            color = TERM_COLORS.GREEN
         else:
-            color = TERM_COLOURS.ENDC
+            color = TERM_COLORS.ENDC
         formatted_reg_value = f"{reg_value:x}".ljust(12)
         line = (
-            f"{highlight.value}{reg_name.ljust(7)}{TERM_COLOURS.ENDC.value}: "
-            + f"{color.value}0x{formatted_reg_value}{TERM_COLOURS.ENDC.value}"
+            f"{highlight.value}{reg_name.ljust(7)}{TERM_COLORS.ENDC.value}: "
+            + f"{color.value}0x{formatted_reg_value}{TERM_COLORS.ENDC.value}"
         )
 
         line += self.generate_printable_line_from_pointer(reg_value)
@@ -170,12 +170,12 @@ class ContextHandler:
 
         if self.old_registers.get(flag_register.name) == flag_value:
             # No change
-            highlight = TERM_COLOURS.BLUE
+            highlight = TERM_COLORS.BLUE
         else:
             # Change and highlight
-            highlight = TERM_COLOURS.RED
+            highlight = TERM_COLORS.RED
 
-        line = f"{highlight.value}{flag_register.name.ljust(7)}{TERM_COLOURS.ENDC.value}: ["
+        line = f"{highlight.value}{flag_register.name.ljust(7)}{TERM_COLORS.ENDC.value}: ["
         line += " ".join(
             [
                 name.upper() if flag_value & bitmask else name
@@ -196,11 +196,11 @@ class ContextHandler:
 
         self.output_line(
             f"[ Legend: "
-            f"{TERM_COLOURS.RED.value}Modified register{TERM_COLOURS.ENDC.value} | "
-            f"{TERM_COLOURS.RED.value}Code{TERM_COLOURS.ENDC.value} | "
-            f"{TERM_COLOURS.GREEN.value}Heap{TERM_COLOURS.ENDC.value} | "
-            f"{TERM_COLOURS.PINK.value}Stack{TERM_COLOURS.ENDC.value} | "
-            f"{TERM_COLOURS.YELLOW.value}String{TERM_COLOURS.ENDC.value} ]"
+            f"{TERM_COLORS.RED.value}Modified register{TERM_COLORS.ENDC.value} | "
+            f"{TERM_COLORS.RED.value}Code{TERM_COLORS.ENDC.value} | "
+            f"{TERM_COLORS.GREEN.value}Heap{TERM_COLORS.ENDC.value} | "
+            f"{TERM_COLORS.PINK.value}Stack{TERM_COLORS.ENDC.value} | "
+            f"{TERM_COLORS.YELLOW.value}String{TERM_COLORS.ENDC.value} ]"
         )
 
     def display_registers(self) -> None:
@@ -237,10 +237,10 @@ class ContextHandler:
                 if current_pc in item:
                     self.output_line(instructions[0])
                     if i > 3:
-                        print_instruction(instructions[i - 3], TERM_COLOURS.GREY)
-                        print_instruction(instructions[i - 2], TERM_COLOURS.GREY)
-                        print_instruction(instructions[i - 1], TERM_COLOURS.GREY)
-                        print_instruction(item, TERM_COLOURS.GREEN)
+                        print_instruction(instructions[i - 3], TERM_COLORS.GREY)
+                        print_instruction(instructions[i - 2], TERM_COLORS.GREY)
+                        print_instruction(instructions[i - 1], TERM_COLORS.GREY)
+                        print_instruction(item, TERM_COLORS.GREEN)
                         # This slice notation (and the 4 below) are a buggy interaction of black and pycodestyle
                         # See: https://github.com/psf/black/issues/157
                         # fmt: off
@@ -248,22 +248,22 @@ class ContextHandler:
                             # fmt: on
                             print_instruction(instruction)
                     if i == 3:
-                        print_instruction(instructions[i - 2], TERM_COLOURS.GREY)
-                        print_instruction(instructions[i - 1], TERM_COLOURS.GREY)
-                        print_instruction(item, TERM_COLOURS.GREEN)
+                        print_instruction(instructions[i - 2], TERM_COLORS.GREY)
+                        print_instruction(instructions[i - 1], TERM_COLORS.GREY)
+                        print_instruction(item, TERM_COLORS.GREEN)
                         # fmt: off
                         for instruction in instructions[i + 1:10]:  # noqa
                             # fmt: on
                             print_instruction(instruction)
                     if i == 2:
-                        print_instruction(instructions[i - 1], TERM_COLOURS.GREY)
-                        print_instruction(item, TERM_COLOURS.GREEN)
+                        print_instruction(instructions[i - 1], TERM_COLORS.GREY)
+                        print_instruction(item, TERM_COLORS.GREEN)
                         # fmt: off
                         for instruction in instructions[i + 1:10]:  # noqa
                             # fmt: on
                             print_instruction(instruction)
                     if i == 1:
-                        print_instruction(item, TERM_COLOURS.GREEN)
+                        print_instruction(item, TERM_COLORS.GREEN)
                         # fmt: off
                         for instruction in instructions[i + 1:10]:  # noqa
                             # fmt: on
@@ -284,8 +284,8 @@ class ContextHandler:
         print_line_with_string("trace")
 
         for i in range(self.thread.GetNumFrames()):
-            number_colour = TERM_COLOURS.GREEN if i == 0 else TERM_COLOURS.PINK
-            line = f"[{number_colour.value}#{i}{TERM_COLOURS.ENDC.value}] "
+            number_color = TERM_COLORS.GREEN if i == 0 else TERM_COLORS.PINK
+            line = f"[{number_color.value}#{i}{TERM_COLORS.ENDC.value}] "
 
             current_frame = self.thread.GetFrameAtIndex(i)
             pc_address = current_frame.GetPCAddress()
@@ -294,12 +294,12 @@ class ContextHandler:
             if func:
                 line += (
                     f"{pc_address.GetLoadAddress(self.target):#x}  {GLYPHS.RIGHT_ARROW.value} "
-                    + f"{TERM_COLOURS.GREEN.value}{func.GetName()}{TERM_COLOURS.ENDC.value}"
+                    + f"{TERM_COLORS.GREEN.value}{func.GetName()}{TERM_COLORS.ENDC.value}"
                 )
             else:
                 line += (
                     f"{pc_address.GetLoadAddress(self.target):#x}  {GLYPHS.RIGHT_ARROW.value} "
-                    + f"{TERM_COLOURS.GREEN.value}{current_frame.GetSymbol().GetName()}{TERM_COLOURS.ENDC.value}"
+                    + f"{TERM_COLORS.GREEN.value}{current_frame.GetSymbol().GetName()}{TERM_COLORS.ENDC.value}"
                 )
 
             line += get_frame_arguments(current_frame)
