@@ -318,7 +318,10 @@ class ContextHandler:
         self.target = exe_ctx.GetTarget()
         self.thread = exe_ctx.GetThread()
         self.arch = get_arch(self.target)
-        self.regions = self.process.GetMemoryRegions()
+        if self.settings.register_coloring is True:
+            self.regions = self.process.GetMemoryRegions()
+        else:
+            self.regions = None
 
         # Hack to print cursor at the top of the screen
         clear_page()

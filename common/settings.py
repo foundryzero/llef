@@ -17,6 +17,10 @@ class LLEFSettings(metaclass=Singleton):
     @property
     def color_output(self):
         return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "color_output", fallback=True)
+    
+    @property
+    def register_coloring(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "register_coloring", fallback=True)
 
     @classmethod
     def _get_setting_names(cls):
