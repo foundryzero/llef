@@ -29,14 +29,14 @@ class SettingsCommand(BaseCommand):
         list_parser = subparsers.add_parser("list", help="list all settings")
         list_parser.set_defaults(action="list")
 
-        list_parser = subparsers.add_parser("save", help="Save settings to config file")
-        list_parser.set_defaults(action="save")
+        save_parser = subparsers.add_parser("save", help="Save settings to config file")
+        save_parser.set_defaults(action="save")
 
-        list_parser = subparsers.add_parser("reload", help="Reload settings from config file (retain session values)")
-        list_parser.set_defaults(action="reload")
+        reload_parser = subparsers.add_parser("reload", help="Reload settings from config file (retain session values)")
+        reload_parser.set_defaults(action="reload")
 
-        list_parser = subparsers.add_parser("reset", help="Reload settings from config file (purge session values)")
-        list_parser.set_defaults(action="reset")
+        reset_parser = subparsers.add_parser("reset", help="Reload settings from config file (purge session values)")
+        reset_parser.set_defaults(action="reset")
 
         set_parser = subparsers.add_parser("set", help="Set LLEF settings")
         set_parser.add_argument("setting", type=str, help="LLEF setting name")
@@ -62,6 +62,10 @@ class SettingsCommand(BaseCommand):
     ) -> None:
         """Handles the invocation of 'llefsettings' command"""
         args = self.parser.parse_args(shlex.split(command))
+
+        if not hasattr(args, "action"):
+            print(SettingsCommand.get_long_help())
+            return
 
         if args.action == "list":
             self.settings.list()
