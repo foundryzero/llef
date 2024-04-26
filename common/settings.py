@@ -26,6 +26,9 @@ class LLEFSettings(metaclass=Singleton):
         self.load()
 
     def validate_settings(self, setting=None) -> bool:
+        """
+        Validate settings by attempting to retrieve all properties thus executing any ConfigParser coverters
+        """
         settings_names = LLEFSettings._get_setting_names()
 
         if setting:
@@ -59,6 +62,7 @@ class LLEFSettings(metaclass=Singleton):
             self._RAW_CONFIG = configparser.ConfigParser()
 
         if not os.path.isfile(LLEF_CONFIG_PATH):
+            self.load_default_settings()
             return
 
         print(f"Loading LLEF settings from {LLEF_CONFIG_PATH}")
