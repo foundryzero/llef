@@ -39,6 +39,29 @@ lldb-15 <optional binary to debug>
 
 ### Use commands:
 
+#### llefsettings
+Various commands for setting, saving, loading and listing LLEF specific commands:
+```
+(lldb) llefsettings --help
+list                list all settings
+save                Save settings to config file
+reload              Reload settings from config file (retain session values)
+reset               Reload settings from config file (purge session values)
+set                 Set LLEF settings
+```
+
+Settings are stored in a file `.llef` located in your home directory formatted as following:
+```
+[LLEF]
+<llefsettings> = <value>
+```
+
+##### Available Settings
+
+| Setting      | Type    | Description                          |
+|--------------|---------|--------------------------------------|
+| color_output | Boolean | Enable/disable color terminal output |
+
 #### Context
 
 Refresh the LLEF GUI with:

@@ -10,7 +10,7 @@ from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_command import BaseCommand
 from commands.base_container import BaseContainer
-from common.constants import MSG_TYPE, TERM_COLOURS
+from common.constants import MSG_TYPE, TERM_COLORS
 from common.de_bruijn import generate_cyclic_pattern
 from common.util import print_message
 
@@ -99,7 +99,7 @@ class PatternCreateCommand(BaseCommand):
             )
             print_message(
                 MSG_TYPE.INFO,
-                f"Pattern saved in variable: {TERM_COLOURS.RED.value}{value.GetName()}{TERM_COLOURS.ENDC.value}",
+                f"Pattern saved in variable: {TERM_COLORS.RED.value}{value.GetName()}{TERM_COLORS.ENDC.value}",
             )
             created_patterns.append(
                 {
