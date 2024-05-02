@@ -2,6 +2,7 @@
 import configparser
 import os
 
+from arch import supported_arch
 from common.singleton import Singleton
 
 LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef")
@@ -45,6 +46,11 @@ class LLEFSettings(metaclass=Singleton):
     @property
     def show_trace(self):
         return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_trace", fallback=True)
+
+    @property
+    def force_arch(self):
+        arch = self._RAW_CONFIG.get(GLOBAL_SECTION, "force_arch", fallback=None)
+        return None if arch not in supported_arch else arch
 
     @classmethod
     def _get_setting_names(cls):

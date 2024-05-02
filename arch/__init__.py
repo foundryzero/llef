@@ -24,9 +24,15 @@ supported_arch = {
     "arm64e": Aarch64,
 }
 
+
 def get_arch(target: SBTarget) -> Type[BaseArch]:
     """Get the architecture of a given target"""
     arch = extract_arch_from_triple(target.triple)
+    return get_arch_from_str(arch)
+
+
+def get_arch_from_str(arch: str) -> Type[BaseArch]:
+    """Get the architecture class from string"""
     if arch in supported_arch:
         return supported_arch[arch]
 
