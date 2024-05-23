@@ -1,3 +1,5 @@
+import os
+
 from typing import Dict, Type, Optional
 
 from lldb import (
@@ -60,6 +62,16 @@ class ContextHandler:
             for term_color in TERM_COLORS:
                 line = line.replace(term_color.value, "")
         print(line)
+    
+    def generate_rebased_address_string(self, address: SBAddress) -> str:
+        module = address.GetModule()
+
+        if module is not None and self.settings.rebase_addresses is True:
+            file_name = os.path.basename(str(module.file))
+            rebased_address = address.GetFileAddress() + 0x100000
+            return f" {TERM_COLORS.GREY.value}({file_name} {rebased_address:#x}){TERM_COLORS.ENDC.value}"
+
+        return ""
 
     def generate_printable_line_from_pointer(
         self, pointer: SBValue, address_containing_pointer: Optional[int] = None
@@ -78,7 +90,7 @@ class ContextHandler:
                 pointer_value.offset - pointer_value.symbol.GetStartAddress().offset
             )
             line += (
-                f" {GLYPHS.RIGHT_ARROW.value} {TERM_COLORS.GREY.value}"
+                f"{self.generate_rebased_address_string(pointer_value)} {GLYPHS.RIGHT_ARROW.value} {TERM_COLORS.GREY.value}"
                 + f"<{pointer_value.symbol.name}+{offset}>{TERM_COLORS.ENDC.value}"
             )
 
@@ -285,15 +297,16 @@ class ContextHandler:
             current_frame = self.thread.GetFrameAtIndex(i)
             pc_address = current_frame.GetPCAddress()
             func = current_frame.GetFunction()
+            trace_address = pc_address.GetLoadAddress(self.target)
 
             if func:
                 line += (
-                    f"{pc_address.GetLoadAddress(self.target):#x}  {GLYPHS.RIGHT_ARROW.value} "
+                    f"{trace_address:#x}{self.generate_rebased_address_string(pc_address)}  {GLYPHS.RIGHT_ARROW.value} "
                     + f"{TERM_COLORS.GREEN.value}{func.GetName()}{TERM_COLORS.ENDC.value}"
                 )
             else:
                 line += (
-                    f"{pc_address.GetLoadAddress(self.target):#x}  {GLYPHS.RIGHT_ARROW.value} "
+                    f"{trace_address:#x}{self.generate_rebased_address_string(pc_address)}  {GLYPHS.RIGHT_ARROW.value} "
                     + f"{TERM_COLORS.GREEN.value}{current_frame.GetSymbol().GetName()}{TERM_COLORS.ENDC.value}"
                 )
 
