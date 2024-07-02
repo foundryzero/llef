@@ -17,10 +17,34 @@ class LLEFSettings(metaclass=Singleton):
     @property
     def color_output(self):
         return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "color_output", fallback=True)
-    
+
     @property
     def register_coloring(self):
         return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "register_coloring", fallback=True)
+
+    @property
+    def show_legend(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_legend", fallback=True)
+
+    @property
+    def show_registers(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_registers", fallback=True)
+
+    @property
+    def show_stack(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_stack", fallback=True)
+
+    @property
+    def show_code(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_code", fallback=True)
+
+    @property
+    def show_threads(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_threads", fallback=True)
+
+    @property
+    def show_trace(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_trace", fallback=True)
 
     @classmethod
     def _get_setting_names(cls):
