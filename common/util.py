@@ -129,6 +129,8 @@ def attempt_to_read_string_from_memory(
 
 def is_code(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to code"""
+    if regions is None:
+        return False
     region = SBMemoryRegionInfo()
     code_bool = False
     if regions.GetMemoryRegionContainingAddress(address, region):
@@ -138,6 +140,8 @@ def is_code(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoLis
 
 def is_stack(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to the stack"""
+    if regions is None:
+        return False
     region = SBMemoryRegionInfo()
     stack_bool = False
     if regions.GetMemoryRegionContainingAddress(address, region):
@@ -148,6 +152,8 @@ def is_stack(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoLi
 
 def is_heap(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to the heap"""
+    if regions is None:
+        return False    
     region = SBMemoryRegionInfo()
     heap_bool = False
     if regions.GetMemoryRegionContainingAddress(address, region):

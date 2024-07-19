@@ -58,9 +58,10 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 
 ##### Available Settings
 
-| Setting      | Type    | Description                          |
-|--------------|---------|--------------------------------------|
-| color_output | Boolean | Enable/disable color terminal output |
+| Setting           | Type    | Description                          |
+|-------------------|---------|--------------------------------------|
+| color_output      | Boolean | Enable/disable color terminal output |
+| register_coloring | Boolean | Enable/disable register coloring     |
 
 #### Context
 
@@ -114,6 +115,17 @@ Finally, modify and execute the following to add the above LLDB module path into
 ```bash
 echo "/usr/lib/llvm-15/lib/python3.10/dist-packages" > ~/.local/lib/python3.10/site-packages/lldb.pth
 ```
+
+## Performance Optimisations
+
+Rendering LLEF output at each breakpoint has been observed to be slow on some platforms. The root cause of this has been traced to the underlying `GetMemoryRegions` LLDB API call. Fortunately, this is only used to identify to whether register values point to code, stack or heap addresses.
+
+To disable register coloring, and potentially significantly improve LLEF performance, disable the `register_coloring` feature using the following `llefsettings` command.
+
+```
+ llefsettings set register_coloring False
+ ```
+
 
 ## 👏 Thanks
 We’re obviously standing on the shoulders of giants here - we’d like to credit [hugsy](https://twitter.com/_hugsy_) for [GEF](https://github.com/hugsy/gef) in particular, from which this tool draws *heavy* inspiration! Please consider this imitation as flattery 🙂
