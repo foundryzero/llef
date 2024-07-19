@@ -68,7 +68,7 @@ class ContextHandler:
 
         if module is not None and self.settings.rebase_addresses is True:
             file_name = os.path.basename(str(module.file))
-            rebased_address = address.GetFileAddress() + 0x100000
+            rebased_address = address.GetFileAddress() + self.settings.rebase_offset
             return f" {TERM_COLORS.GREY.value}({file_name} {rebased_address:#x}){TERM_COLORS.ENDC.value}"
 
         return ""
