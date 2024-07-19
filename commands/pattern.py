@@ -12,10 +12,8 @@ from commands.base_command import BaseCommand
 from commands.base_container import BaseContainer
 from common.constants import MSG_TYPE, TERM_COLORS
 from common.de_bruijn import generate_cyclic_pattern
+from common.state import LLEFState
 from common.util import print_message
-
-global created_patterns
-created_patterns = []
 
 
 class PatternContainer(BaseContainer):
@@ -41,6 +39,7 @@ class PatternCreateCommand(BaseCommand):
 
     program: str = "create"
     container: Type[BaseContainer] = PatternContainer
+    state: LLEFState
 
     @classmethod
     def get_command_parser(cls) -> argparse.ArgumentParser:
@@ -70,6 +69,7 @@ class PatternCreateCommand(BaseCommand):
     def __init__(self, _: SBDebugger, __: Dict[Any, Any]) -> None:
         """Class initializer."""
         self.parser = self.get_command_parser()
+        self.state = LLEFState()
 
     def __call__(
         self,
@@ -101,7 +101,7 @@ class PatternCreateCommand(BaseCommand):
                 MSG_TYPE.INFO,
                 f"Pattern saved in variable: {TERM_COLORS.RED.value}{value.GetName()}{TERM_COLORS.ENDC.value}",
             )
-            created_patterns.append(
+            self.state.created_patterns.append(
                 {
                     "name": value.GetName(),
                     "pattern_bytes": pattern,
@@ -117,6 +117,7 @@ class PatternSearchCommand(BaseCommand):
 
     program = "search"
     container: Type[BaseContainer] = PatternContainer
+    state: LLEFState
 
     @classmethod
     def get_command_parser(cls) -> argparse.ArgumentParser:
@@ -140,6 +141,7 @@ class PatternSearchCommand(BaseCommand):
     def __init__(self, _: SBDebugger, __: Dict[Any, Any]) -> None:
         """Class initializer."""
         self.parser = self.get_command_parser()
+        self.state = LLEFState()
 
     def __call__(
         self,
@@ -162,7 +164,7 @@ class PatternSearchCommand(BaseCommand):
         else:
             pass
         if pattern:
-            for created_pattern in created_patterns:
+            for created_pattern in self.state.created_patterns:
                 pattern_string = created_pattern.get("pattern_string")
                 if pattern_string and pattern in pattern_string:
                     print_message(

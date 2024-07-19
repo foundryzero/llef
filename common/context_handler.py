@@ -1,7 +1,5 @@
 from typing import Dict, Type, Optional
 
-from lldb import SBDebugger, SBExecutionContext
-
 from lldb import (
     SBAddress,
     SBDebugger,
@@ -18,6 +16,7 @@ from arch import get_arch
 from arch.base_arch import BaseArch, FlagRegister
 from common.constants import GLYPHS, TERM_COLORS
 from common.settings import LLEFSettings
+from common.state import LLEFState
 from common.util import (
     attempt_to_read_string_from_memory,
     clear_page,
@@ -43,22 +42,18 @@ class ContextHandler:
     debugger: SBDebugger
     exe_ctx: SBExecutionContext
     settings: LLEFSettings
-
-    old_registers: Dict[str, int] = {}
+    state: LLEFState
 
     def __init__(
         self,
         debugger: SBDebugger,
     ) -> None:
         """
-        This is probably where a global state object should be initiated. Current version only uses
-        class scoped state (e.g. self.old_registers). The limitation of this is that `commands` can't
-        interact with state.
-
         For up to date documentation on args provided to this function run: `help target stop-hook add`
         """
         self.debugger = debugger
         self.settings = LLEFSettings()
+        self.state = LLEFState()
 
     def output_line(self, line: str) -> None:
         if self.settings.color_output is False:
@@ -139,7 +134,7 @@ class ContextHandler:
         reg_name = register.GetName()
         reg_value = register.GetValueAsUnsigned()
 
-        if self.old_registers.get(reg_name) == register.GetValueAsUnsigned():
+        if self.state.prev_registers.get(reg_name) == register.GetValueAsUnsigned():
             # Register value as not changed
             highlight = TERM_COLORS.BLUE
         else:
@@ -168,7 +163,7 @@ class ContextHandler:
         """Format and print the contents of the flag register."""
         flag_value = self.frame.register[flag_register.name].GetValueAsUnsigned()
 
-        if self.old_registers.get(flag_register.name) == flag_value:
+        if self.state.prev_registers.get(flag_register.name) == flag_value:
             # No change
             highlight = TERM_COLORS.BLUE
         else:
@@ -189,7 +184,7 @@ class ContextHandler:
         """This updates the cached registers, which are used to track which registered have changed."""
 
         for reg in get_registers(self.frame, self.arch().gpr_key):
-            self.old_registers[reg.GetName()] = reg.GetValueAsUnsigned()
+            self.state.prev_registers[reg.GetName()] = reg.GetValueAsUnsigned()
 
     def print_legend(self) -> None:
         """Print a line containing the color legend"""
