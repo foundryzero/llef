@@ -58,9 +58,10 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 
 ##### Available Settings
 
-| Setting      | Type    | Description                          |
-|--------------|---------|--------------------------------------|
-| color_output | Boolean | Enable/disable color terminal output |
+| Setting           | Type    | Description                          |
+|-------------------|---------|--------------------------------------|
+| color_output      | Boolean | Enable/disable color terminal output |
+| register_coloring | Boolean | Enable/disable register coloring     |
 
 #### Context
 
