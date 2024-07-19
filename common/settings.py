@@ -52,6 +52,14 @@ class LLEFSettings(metaclass=Singleton):
         arch = self._RAW_CONFIG.get(GLOBAL_SECTION, "force_arch", fallback=None)
         return None if arch not in supported_arch else arch
 
+    @property
+    def rebase_addresses(self):
+        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "rebase_addresses", fallback=True)
+
+    @property
+    def rebase_offset(self):
+        return self._RAW_CONFIG.getint(GLOBAL_SECTION, "rebase_offset", fallback=0x100000)
+
     @classmethod
     def _get_setting_names(cls):
         return [name for name, value in vars(cls).items() if isinstance(value, property)]

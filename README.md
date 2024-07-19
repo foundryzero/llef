@@ -69,6 +69,8 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 | show_threads      | Boolean | Enable/disable threads output                      |
 | show_trace        | Boolean | Enable/disable trace output                        |
 | force_arch        | String  | Force register display architecture (experimental) |
+| rebase_addresses  | Boolean | Enable/disable address rebase output               |
+| rebase_offset     | Int     | Set the rebase offset (default 0x100000)           |
 
 #### Context
 
@@ -105,6 +107,12 @@ aabacadaea
 
 ### Breakpoint hook
 This is automatic and prints all the currently implemented information at a break point.
+
+#### Address Rebasing
+Configurable with the `rebase_addresses` setting the address rebasing feature performs a lookup for each code address presented in the output to display the associated binary and relative address. This relative address is offset by the value defined in setting `rebase_offset` which defaults to the Ghidra base address of `0x100000`. The result is an address output that can be easily copied and pasted into an IDE "Go To Address" feature without having to do the maths to convert from the runtime address.
+
+Rebased addresses are shown in brackets after the runtime address:
+![rebase address feature](assets/rebase-feature.png)
 
 ## 👷‍♂️ Troubleshooting LLDB Python support
 LLDB comes bundled with python modules that are required for LLEF to run. If on launching LLDB with LLEF you encounter `ModuleNotFoundError` messages it is likely you will need to manually add the LLDB python modules on your python path.
