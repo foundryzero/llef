@@ -46,5 +46,6 @@ class I386(BaseArch):
     }
 
     flag_registers = [
-        FlagRegister("eflags", _eflags_register_bit_masks)
+        FlagRegister("eflags", _eflags_register_bit_masks),
+        FlagRegister("rflags", _eflags_register_bit_masks)
     ]

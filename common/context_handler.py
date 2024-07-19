@@ -12,7 +12,7 @@ from lldb import (
     SBValue,
 )
 
-from arch import get_arch
+from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
 from common.constants import GLYPHS, TERM_COLORS
 from common.settings import LLEFSettings
@@ -202,9 +202,9 @@ class ContextHandler:
         """Print the registers display section"""
 
         print_line_with_string("registers")
-        for reg in get_registers(self.frame, self.arch().gpr_key):
-            if reg.GetName() in self.arch().gpr_registers:
-                self.print_register(reg)
+        for reg in self.arch().gpr_registers:
+            if self.frame.register[reg] is not None:
+                self.print_register(self.frame.register[reg])
         for flag_register in self.arch.flag_registers:
             if self.frame.register[flag_register.name] is not None:
                 self.print_flags_register(flag_register)
@@ -312,7 +312,11 @@ class ContextHandler:
         self.process = exe_ctx.GetProcess()
         self.target = exe_ctx.GetTarget()
         self.thread = exe_ctx.GetThread()
-        self.arch = get_arch(self.target)
+        if self.settings.force_arch is not None:
+            self.arch = get_arch_from_str(self.settings.force_arch)
+        else:
+            self.arch = get_arch(self.target)
+
         if self.settings.register_coloring is True:
             self.regions = self.process.GetMemoryRegions()
         else:
