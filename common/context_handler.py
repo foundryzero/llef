@@ -321,17 +321,23 @@ class ContextHandler:
         # Hack to print cursor at the top of the screen
         clear_page()
 
-        self.print_legend()
+        if self.settings.show_legend:
+            self.print_legend()
 
-        self.display_registers()
+        if self.settings.show_registers:
+            self.display_registers()
 
-        self.display_stack()
+        if self.settings.show_stack:
+            self.display_stack()
 
-        self.display_code()
+        if self.settings.show_code:
+            self.display_code()
 
-        self.display_threads()
+        if self.settings.show_threads:
+            self.display_threads()
 
-        self.display_trace()
+        if self.settings.show_trace:
+            self.display_trace()
 
         print_line()
 
