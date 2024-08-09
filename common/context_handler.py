@@ -18,6 +18,7 @@ from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
 from common.constants import GLYPHS, TERM_COLORS
 from common.settings import LLEFSettings
+from common.color_settings import LLEFColorSettings
 from common.state import LLEFState
 from common.util import (
     attempt_to_read_string_from_memory,
@@ -44,6 +45,7 @@ class ContextHandler:
     debugger: SBDebugger
     exe_ctx: SBExecutionContext
     settings: LLEFSettings
+    color_settings: LLEFColorSettings
     state: LLEFState
 
     def __init__(
@@ -55,6 +57,7 @@ class ContextHandler:
         """
         self.debugger = debugger
         self.settings = LLEFSettings()
+        self.color_settings = LLEFColorSettings()
         self.state = LLEFState()
 
     def output_line(self, line: str) -> None:
@@ -62,14 +65,18 @@ class ContextHandler:
             for term_color in TERM_COLORS:
                 line = line.replace(term_color.value, "")
         print(line)
-    
+
     def generate_rebased_address_string(self, address: SBAddress) -> str:
         module = address.GetModule()
 
         if module is not None and self.settings.rebase_addresses is True:
             file_name = os.path.basename(str(module.file))
             rebased_address = address.GetFileAddress() + self.settings.rebase_offset
-            return f" {TERM_COLORS.GREY.value}({file_name} {rebased_address:#x}){TERM_COLORS.ENDC.value}"
+            return (
+                f" {TERM_COLORS[self.color_settings.rebased_address_color].value}"
+                f"({file_name} {rebased_address:#x})"
+                f"{TERM_COLORS.ENDC.value}"
+            )
 
         return ""
 
@@ -90,8 +97,10 @@ class ContextHandler:
                 pointer_value.offset - pointer_value.symbol.GetStartAddress().offset
             )
             line += (
-                f"{self.generate_rebased_address_string(pointer_value)} {GLYPHS.RIGHT_ARROW.value} {TERM_COLORS.GREY.value}"
-                + f"<{pointer_value.symbol.name}+{offset}>{TERM_COLORS.ENDC.value}"
+                f"{self.generate_rebased_address_string(pointer_value)} {GLYPHS.RIGHT_ARROW.value}"
+                f"{TERM_COLORS[self.color_settings.dereferenced_value_color].value}"
+                f"<{pointer_value.symbol.name}+{offset}>"
+                f"{TERM_COLORS.ENDC.value}"
             )
 
         referenced_string = attempt_to_read_string_from_memory(
@@ -102,8 +111,10 @@ class ContextHandler:
             # Only add this to the line if there are any printable characters in refd_string
             referenced_string = referenced_string.replace("\n", " ")
             line += (
-                f' {GLYPHS.RIGHT_ARROW.value} ("{TERM_COLORS.YELLOW.value}{referenced_string}'
-                + f'{TERM_COLORS.ENDC.value}"?)'
+                f' {GLYPHS.RIGHT_ARROW.value} ("'
+                f'{TERM_COLORS[self.color_settings.string_color].value}'
+                f'{referenced_string}'
+                f'{TERM_COLORS.ENDC.value}"?)'
             )
 
         if address_containing_pointer is not None:
@@ -113,7 +124,10 @@ class ContextHandler:
                     registers_pointing_to_address.append(f"${register.GetName()}")
             if len(registers_pointing_to_address) > 0:
                 reg_list = ", ".join(registers_pointing_to_address)
-                line += f" {TERM_COLORS.BLUE.value}{GLYPHS.LEFT_ARROW.value}{reg_list}"
+                line += (
+                    f" {TERM_COLORS[self.color_settings.dereferenced_register_color].value}"
+                    f"{GLYPHS.LEFT_ARROW.value}{reg_list}"
+                )
 
         return line
 
@@ -121,7 +135,7 @@ class ContextHandler:
         """Produce a printable line containing information about a given stack @addr and print it"""
         # Add stack address to line
         line = (
-            f"{TERM_COLORS.CYAN.value}{hex(addr.GetValueAsUnsigned())}"
+            f"{TERM_COLORS[self.color_settings.stack_address_color].value}{hex(addr.GetValueAsUnsigned())}"
             + f"{TERM_COLORS.ENDC.value}{GLYPHS.VERTICAL_LINE.value}"
         )
         # Add offset to line
@@ -148,17 +162,17 @@ class ContextHandler:
 
         if self.state.prev_registers.get(reg_name) == register.GetValueAsUnsigned():
             # Register value as not changed
-            highlight = TERM_COLORS.BLUE
+            highlight = TERM_COLORS[self.color_settings.register_color]
         else:
             # Register value has changed so highlight
-            highlight = TERM_COLORS.RED
+            highlight = TERM_COLORS[self.color_settings.modified_register_color]
 
         if is_code(reg_value, self.process, self.regions):
-            color = TERM_COLORS.RED
+            color = TERM_COLORS[self.color_settings.code_color]
         elif is_stack(reg_value, self.process, self.regions):
-            color = TERM_COLORS.PINK
+            color = TERM_COLORS[self.color_settings.stack_color]
         elif is_heap(reg_value, self.process, self.regions):
-            color = TERM_COLORS.GREEN
+            color = TERM_COLORS[self.color_settings.heap_color]
         else:
             color = TERM_COLORS.ENDC
         formatted_reg_value = f"{reg_value:x}".ljust(12)
@@ -177,10 +191,10 @@ class ContextHandler:
 
         if self.state.prev_registers.get(flag_register.name) == flag_value:
             # No change
-            highlight = TERM_COLORS.BLUE
+            highlight = TERM_COLORS[self.color_settings.register_color]
         else:
             # Change and highlight
-            highlight = TERM_COLORS.RED
+            highlight = TERM_COLORS[self.color_settings.modified_register_color]
 
         line = f"{highlight.value}{flag_register.name.ljust(7)}{TERM_COLORS.ENDC.value}: ["
         line += " ".join(
@@ -203,17 +217,22 @@ class ContextHandler:
 
         self.output_line(
             f"[ Legend: "
-            f"{TERM_COLORS.RED.value}Modified register{TERM_COLORS.ENDC.value} | "
-            f"{TERM_COLORS.RED.value}Code{TERM_COLORS.ENDC.value} | "
-            f"{TERM_COLORS.GREEN.value}Heap{TERM_COLORS.ENDC.value} | "
-            f"{TERM_COLORS.PINK.value}Stack{TERM_COLORS.ENDC.value} | "
-            f"{TERM_COLORS.YELLOW.value}String{TERM_COLORS.ENDC.value} ]"
+            f"{TERM_COLORS[self.color_settings.modified_register_color].value}"
+            f"Modified register{TERM_COLORS.ENDC.value} | "
+            f"{TERM_COLORS[self.color_settings.code_color].value}Code{TERM_COLORS.ENDC.value} | "
+            f"{TERM_COLORS[self.color_settings.heap_color].value}Heap{TERM_COLORS.ENDC.value} | "
+            f"{TERM_COLORS[self.color_settings.stack_color].value}Stack{TERM_COLORS.ENDC.value} | "
+            f"{TERM_COLORS[self.color_settings.string_color].value}String{TERM_COLORS.ENDC.value} ]"
         )
 
     def display_registers(self) -> None:
         """Print the registers display section"""
 
-        print_line_with_string("registers")
+        print_line_with_string(
+            "registers",
+            line_color=TERM_COLORS[self.color_settings.line_color],
+            string_color=TERM_COLORS[self.color_settings.section_header_color]
+        )
         for reg in self.arch().gpr_registers:
             if self.frame.register[reg] is not None:
                 self.print_register(self.frame.register[reg])
@@ -224,7 +243,11 @@ class ContextHandler:
     def display_stack(self) -> None:
         """Print information about the contents of the top of the stack"""
 
-        print_line_with_string("stack")
+        print_line_with_string(
+            "stack",
+            line_color=TERM_COLORS[self.color_settings.line_color],
+            string_color=TERM_COLORS[self.color_settings.section_header_color]
+        )
         for inc in range(0, self.arch().bits, 8):
             stack_pointer = self.frame.GetSP()
             addr = self.target.EvaluateExpression(f"{stack_pointer} + {inc}")
@@ -234,7 +257,11 @@ class ContextHandler:
         """
         Print the disassembly generated by LLDB.
         """
-        print_line_with_string("code")
+        print_line_with_string(
+            "code",
+            line_color=TERM_COLORS[self.color_settings.line_color],
+            string_color=TERM_COLORS[self.color_settings.section_header_color]
+        )
 
         if self.frame.disassembly:
             instructions = self.frame.disassembly.split("\n")
@@ -244,10 +271,10 @@ class ContextHandler:
                 if current_pc in item:
                     self.output_line(instructions[0])
                     if i > 3:
-                        print_instruction(instructions[i - 3], TERM_COLORS.GREY)
-                        print_instruction(instructions[i - 2], TERM_COLORS.GREY)
-                        print_instruction(instructions[i - 1], TERM_COLORS.GREY)
-                        print_instruction(item, TERM_COLORS.GREEN)
+                        print_instruction(instructions[i - 3], TERM_COLORS[self.color_settings.instruction_color])
+                        print_instruction(instructions[i - 2], TERM_COLORS[self.color_settings.instruction_color])
+                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
+                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
                         # This slice notation (and the 4 below) are a buggy interaction of black and pycodestyle
                         # See: https://github.com/psf/black/issues/157
                         # fmt: off
@@ -255,22 +282,22 @@ class ContextHandler:
                             # fmt: on
                             print_instruction(instruction)
                     if i == 3:
-                        print_instruction(instructions[i - 2], TERM_COLORS.GREY)
-                        print_instruction(instructions[i - 1], TERM_COLORS.GREY)
-                        print_instruction(item, TERM_COLORS.GREEN)
+                        print_instruction(instructions[i - 2], TERM_COLORS[self.color_settings.instruction_color])
+                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
+                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
                         # fmt: off
                         for instruction in instructions[i + 1:10]:  # noqa
                             # fmt: on
                             print_instruction(instruction)
                     if i == 2:
-                        print_instruction(instructions[i - 1], TERM_COLORS.GREY)
-                        print_instruction(item, TERM_COLORS.GREEN)
+                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
+                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
                         # fmt: off
                         for instruction in instructions[i + 1:10]:  # noqa
                             # fmt: on
                             print_instruction(instruction)
                     if i == 1:
-                        print_instruction(item, TERM_COLORS.GREEN)
+                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
                         # fmt: off
                         for instruction in instructions[i + 1:10]:  # noqa
                             # fmt: on
@@ -280,7 +307,11 @@ class ContextHandler:
 
     def display_threads(self) -> None:
         """Print LLDB formatted thread information"""
-        print_line_with_string("threads")
+        print_line_with_string(
+            "threads",
+            line_color=TERM_COLORS[self.color_settings.line_color],
+            string_color=TERM_COLORS[self.color_settings.section_header_color]
+        )
         for thread in self.process:
             print(thread)
 
@@ -288,10 +319,17 @@ class ContextHandler:
         """
         Prints the call stack including arguments if LLDB knows them.
         """
-        print_line_with_string("trace")
+        print_line_with_string(
+            "trace",
+            line_color=TERM_COLORS[self.color_settings.line_color],
+            string_color=TERM_COLORS[self.color_settings.section_header_color]
+        )
 
         for i in range(self.thread.GetNumFrames()):
-            number_color = TERM_COLORS.GREEN if i == 0 else TERM_COLORS.PINK
+            if i == 0:
+                number_color = TERM_COLORS[self.color_settings.highlighted_index_color]
+            else:
+                number_color = TERM_COLORS[self.color_settings.index_color]
             line = f"[{number_color.value}#{i}{TERM_COLORS.ENDC.value}] "
 
             current_frame = self.thread.GetFrameAtIndex(i)
@@ -302,15 +340,20 @@ class ContextHandler:
             if func:
                 line += (
                     f"{trace_address:#x}{self.generate_rebased_address_string(pc_address)}  {GLYPHS.RIGHT_ARROW.value} "
-                    + f"{TERM_COLORS.GREEN.value}{func.GetName()}{TERM_COLORS.ENDC.value}"
+                    f"{TERM_COLORS[self.color_settings.function_name_color].value}"
+                    f"{func.GetName()}{TERM_COLORS.ENDC.value}"
                 )
             else:
                 line += (
                     f"{trace_address:#x}{self.generate_rebased_address_string(pc_address)}  {GLYPHS.RIGHT_ARROW.value} "
-                    + f"{TERM_COLORS.GREEN.value}{current_frame.GetSymbol().GetName()}{TERM_COLORS.ENDC.value}"
+                    f"{TERM_COLORS[self.color_settings.function_name_color].value}"
+                    f"{current_frame.GetSymbol().GetName()}{TERM_COLORS.ENDC.value}"
                 )
 
-            line += get_frame_arguments(current_frame)
+            line += get_frame_arguments(
+                current_frame,
+                frame_argument_name_color=TERM_COLORS[self.color_settings.frame_argument_name_color]
+            )
 
             self.output_line(line)
 
@@ -356,6 +399,6 @@ class ContextHandler:
         if self.settings.show_trace:
             self.display_trace()
 
-        print_line()
+        print_line(color=TERM_COLORS[self.color_settings.line_color])
 
         self.update_registers()

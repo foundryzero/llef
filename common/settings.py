@@ -1,71 +1,63 @@
 """Global settings module"""
-import configparser
 import os
 
 from arch import supported_arch
 from common.singleton import Singleton
-
-LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef")
-GLOBAL_SECTION = "LLEF"
+from common.base_settings import BaseLLEFSettings
 
 
-class LLEFSettings(metaclass=Singleton):
+class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     """
-    Global settings class - loaded from file defined in `LLEF_CONFIG_PATH`
+    Global general settings class - loaded from file defined in `LLEF_CONFIG_PATH`
     """
-    _RAW_CONFIG: configparser.ConfigParser = configparser.ConfigParser()
+
+    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef")
+    GLOBAL_SECTION = "LLEF"
 
     @property
     def color_output(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "color_output", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "color_output", fallback=True)
 
     @property
     def register_coloring(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "register_coloring", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "register_coloring", fallback=True)
 
     @property
     def show_legend(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_legend", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_legend", fallback=True)
 
     @property
     def show_registers(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_registers", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_registers", fallback=True)
 
     @property
     def show_stack(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_stack", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_stack", fallback=True)
 
     @property
     def show_code(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_code", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_code", fallback=True)
 
     @property
     def show_threads(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_threads", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_threads", fallback=True)
 
     @property
     def show_trace(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "show_trace", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_trace", fallback=True)
 
     @property
     def force_arch(self):
-        arch = self._RAW_CONFIG.get(GLOBAL_SECTION, "force_arch", fallback=None)
+        arch = self._RAW_CONFIG.get(self.GLOBAL_SECTION, "force_arch", fallback=None)
         return None if arch not in supported_arch else arch
 
     @property
     def rebase_addresses(self):
-        return self._RAW_CONFIG.getboolean(GLOBAL_SECTION, "rebase_addresses", fallback=True)
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "rebase_addresses", fallback=True)
 
     @property
     def rebase_offset(self):
-        return self._RAW_CONFIG.getint(GLOBAL_SECTION, "rebase_offset", fallback=0x100000)
-
-    @classmethod
-    def _get_setting_names(cls):
-        return [name for name, value in vars(cls).items() if isinstance(value, property)]
-
-    def __init__(self):
-        self.load()
+        return self._RAW_CONFIG.getint(self.GLOBAL_SECTION, "rebase_offset", fallback=0x100000)
 
     def validate_settings(self, setting=None) -> bool:
         """
@@ -85,67 +77,6 @@ class LLEFSettings(metaclass=Singleton):
                 getattr(self, setting_name)
             except ValueError:
                 valid = False
-                raw_value = self._RAW_CONFIG.get(GLOBAL_SECTION, setting_name)
+                raw_value = self._RAW_CONFIG.get(self.GLOBAL_SECTION, setting_name)
                 print(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
         return valid
-
-    def load_default_settings(self):
-        """
-        Reset settings and use default values
-        """
-        self._RAW_CONFIG = configparser.ConfigParser()
-        self._RAW_CONFIG.add_section(GLOBAL_SECTION)
-
-    def load(self, reset=False):
-        """
-        Load settings from file
-        """
-        if reset:
-            self._RAW_CONFIG = configparser.ConfigParser()
-
-        if not os.path.isfile(LLEF_CONFIG_PATH):
-            self.load_default_settings()
-            return
-
-        print(f"Loading LLEF settings from {LLEF_CONFIG_PATH}")
-
-        self._RAW_CONFIG.read(LLEF_CONFIG_PATH)
-
-        if not self._RAW_CONFIG.has_section(GLOBAL_SECTION):
-            self.load_default_settings()
-            print("Settings file missing 'LLEF' section. Default settings loaded.")
-
-        if not self.validate_settings():
-            self.load_default_settings()
-            print("Error parsing config. Default settings loaded.")
-
-    def list(self):
-        """
-        List all settings and their current values
-        """
-        settings_names = LLEFSettings._get_setting_names()
-        for setting_name in settings_names:
-            print(f"{setting_name}={getattr(self, setting_name)}")
-
-    def save(self):
-        """
-        Save LLEF setting to file defined in `LLEF_CONFIG_PATH`
-        """
-        with open(LLEF_CONFIG_PATH, "w") as configfile:
-            self._RAW_CONFIG.write(configfile)
-
-    def set(self, setting: str, value: str):
-        """
-        Set a LLEF setting
-        """
-        if not hasattr(self, setting):
-            print(f"Invalid LLEF setting {setting}")
-
-        restore_value = getattr(self, setting)
-        self._RAW_CONFIG.set(GLOBAL_SECTION, setting, value)
-
-        if not self.validate_settings(setting=setting):
-            self._RAW_CONFIG.set(GLOBAL_SECTION, setting, str(restore_value))
-        else:
-            print(f"Set {setting} to {getattr(self, setting)}")
-

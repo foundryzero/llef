@@ -72,6 +72,43 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 | rebase_addresses  | Boolean | Enable/disable address rebase output               |
 | rebase_offset     | Int     | Set the rebase offset (default 0x100000)           |
 
+#### llefcolorsettings
+Allows setting LLEF GUI colors:
+```
+(lldb) llefcolorsettings --help
+list                list all color settings
+save                Save settings to config file
+reload              Reload settings from config file (retain session values)
+reset               Reload settings from config file (purge session values)
+set                 Set LLEF color settings
+```
+
+##### Available Color Settings
+
+Supported colors: BLUE, GREEN, YELLOW, RED, PINK, CYAN, GREY
+
+| Color                         |
+|-------------------------------|
+| register_color                |
+| modified_register_color       |
+| code_color                    |
+| heap_color                    |
+| stack_color                   |
+| string_color                  |
+| stack_address_color           |
+| function_name_color           |
+| instruction_color             |
+| highlighted_instruction_color |
+| line_color                    |
+| rebased_address_color         |
+| section_header_color          |
+| highlighted_index_color       |
+| index_color                   |
+| dereferenced_value_color      |
+| dereferenced_register_color   |
+| frame_argument_name_color     |
+
+
 #### Context
 
 Refresh the LLEF GUI with:
