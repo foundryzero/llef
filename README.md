@@ -15,6 +15,7 @@ It uses LLDB's Python API to add extra status output and a few new commands, so 
 * arm
 * aarch64 / arm64
 * i386
+* PowerPC
 
 ## 📓 Requirements
 * LLDB 15+ (https://apt.llvm.org/) _On macOS this is bundled with Xcode 14.3+_
