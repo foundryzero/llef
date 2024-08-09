@@ -8,6 +8,7 @@ from arch.arm import Arm
 from arch.base_arch import BaseArch
 from arch.i386 import I386
 from arch.x86_64 import X86_64
+from arch.ppc import PPC
 from common.constants import MSG_TYPE
 from common.util import extract_arch_from_triple, print_message
 
@@ -22,6 +23,7 @@ supported_arch = {
     "aarch64": Aarch64,
     "arm64": Aarch64,
     "arm64e": Aarch64,
+    "powerpc": PPC
 }
 
 
