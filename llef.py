@@ -23,6 +23,7 @@ from commands.pattern import (
 )
 from commands.context import ContextCommand
 from commands.settings import SettingsCommand
+from commands.color_settings import ColorSettingsCommand
 from handlers.stop_hook import StopHookHandler
 
 
@@ -32,7 +33,8 @@ def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
         PatternCreateCommand,
         PatternSearchCommand,
         ContextCommand,
-        SettingsCommand
+        SettingsCommand,
+        ColorSettingsCommand
     ]
 
     handlers = [StopHookHandler]

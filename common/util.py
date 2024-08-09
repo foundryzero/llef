@@ -58,12 +58,16 @@ def print_line(
 
 def print_message(msg_type: MSG_TYPE, message: str) -> None:
     """Format and print a @message"""
+    info_color = TERM_COLORS.BLUE
+    success_color = TERM_COLORS.GREEN
+    error_color = TERM_COLORS.GREEN
+
     if msg_type == MSG_TYPE.INFO:
-        print(f"{TERM_COLORS.BLUE.value}[+]{TERM_COLORS.ENDC.value} {message}")
+        print(f"{info_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
     elif msg_type == MSG_TYPE.SUCCESS:
-        print(f"{TERM_COLORS.GREEN.value}[+]{TERM_COLORS.ENDC.value} {message}")
+        print(f"{success_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
     elif msg_type == MSG_TYPE.ERROR:
-        print(f"{TERM_COLORS.RED.value}[+]{TERM_COLORS.ENDC.value} {message}")
+        print(f"{error_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
 
 
 def print_instruction(line: str, color: TERM_COLORS = TERM_COLORS.ENDC) -> None:
@@ -85,7 +89,7 @@ def get_registers(frame: SBFrame, frame_type: str) -> List[SBValue]:
     return registers
 
 
-def get_frame_arguments(frame: SBFrame) -> str:
+def get_frame_arguments(frame: SBFrame, frame_argument_name_color: TERM_COLORS) -> str:
     """
     Returns a string containing args of the supplied frame
     """
@@ -104,7 +108,7 @@ def get_frame_arguments(frame: SBFrame) -> str:
             except ValueError:
                 pass
         args.append(
-            f"{TERM_COLORS.YELLOW.value}{var.GetName()}{TERM_COLORS.ENDC.value}={value}"
+            f"{frame_argument_name_color.value}{var.GetName()}{TERM_COLORS.ENDC.value}={value}"
         )
     return f"({' '.join(args)})"
 
