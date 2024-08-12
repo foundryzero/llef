@@ -207,8 +207,9 @@ class ContextHandler:
     def update_registers(self) -> None:
         """This updates the cached registers, which are used to track which registered have changed."""
 
-        for reg in get_registers(self.frame, self.arch().gpr_key):
-            self.state.prev_registers[reg.GetName()] = reg.GetValueAsUnsigned()
+        for reg_set in self.frame.registers:
+            for reg in reg_set:
+                self.state.prev_registers[reg.GetName()] = reg.GetValueAsUnsigned()
 
     def print_legend(self) -> None:
         """Print a line containing the color legend"""
@@ -231,7 +232,19 @@ class ContextHandler:
             line_color=TERM_COLORS[self.color_settings.line_color],
             string_color=TERM_COLORS[self.color_settings.section_header_color]
         )
-        for reg in self.arch().gpr_registers:
+
+        if self.settings.show_all_registers:
+            register_list = []
+            for reg_set in self.frame.registers:
+                for reg in reg_set:
+                    register_list.append(reg.name)
+            for reg in self.arch.flag_registers:
+                if reg.name in register_list:
+                    register_list.remove(reg.name)
+        else:
+            register_list = self.arch().gpr_registers
+
+        for reg in register_list:
             if self.frame.register[reg] is not None:
                 self.print_register(self.frame.register[reg])
         for flag_register in self.arch.flag_registers:

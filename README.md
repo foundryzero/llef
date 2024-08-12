@@ -59,19 +59,20 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 
 ##### Available Settings
 
-| Setting           | Type    | Description                                        |
-|-------------------|---------|----------------------------------------------------|
-| color_output      | Boolean | Enable/disable color terminal output               |
-| register_coloring | Boolean | Enable/disable register coloring                   |
-| show_legend       | Boolean | Enable/disable legend output                       |
-| show_registers    | Boolean | Enable/disable registers output                    |
-| show_stack        | Boolean | Enable/disable stack output                        |
-| show_code         | Boolean | Enable/disable code output                         |
-| show_threads      | Boolean | Enable/disable threads output                      |
-| show_trace        | Boolean | Enable/disable trace output                        |
-| force_arch        | String  | Force register display architecture (experimental) |
-| rebase_addresses  | Boolean | Enable/disable address rebase output               |
-| rebase_offset     | Int     | Set the rebase offset (default 0x100000)           |
+| Setting            | Type    | Description                                        |
+| ------------------ | ------- | -------------------------------------------------- |
+| color_output       | Boolean | Enable/disable color terminal output               |
+| register_coloring  | Boolean | Enable/disable register coloring                   |
+| show_legend        | Boolean | Enable/disable legend output                       |
+| show_registers     | Boolean | Enable/disable registers output                    |
+| show_stack         | Boolean | Enable/disable stack output                        |
+| show_code          | Boolean | Enable/disable code output                         |
+| show_threads       | Boolean | Enable/disable threads output                      |
+| show_trace         | Boolean | Enable/disable trace output                        |
+| force_arch         | String  | Force register display architecture (experimental) |
+| rebase_addresses   | Boolean | Enable/disable address rebase output               |
+| rebase_offset      | Int     | Set the rebase offset (default 0x100000)           |
+| show_all_registers | Boolean | Enable/disable extended register output            |
 
 #### llefcolorsettings
 Allows setting LLEF GUI colors:
