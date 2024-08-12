@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_command import BaseCommand
+from common.util import output_line
 
 
 class BaseSettingsCommand(BaseCommand, ABC):
@@ -46,7 +47,7 @@ class BaseSettingsCommand(BaseCommand, ABC):
         args = self.parser.parse_args(shlex.split(command))
 
         if not hasattr(args, "action"):
-            print(self.__class__.get_long_help())
+            output_line(self.__class__.get_long_help())
             return
 
         if args.action == "list":

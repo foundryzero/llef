@@ -13,7 +13,7 @@ from commands.base_container import BaseContainer
 from common.constants import MSG_TYPE, TERM_COLORS
 from common.de_bruijn import generate_cyclic_pattern
 from common.state import LLEFState
-from common.util import print_message
+from common.util import print_message, output_line
 
 
 class PatternContainer(BaseContainer):
@@ -86,7 +86,7 @@ class PatternCreateCommand(BaseCommand):
             MSG_TYPE.INFO, f"Generating a pattern of {length} bytes (n={num_chars})"
         )
         pattern = generate_cyclic_pattern(length, num_chars)
-        print(pattern.decode("utf-8"))
+        output_line(pattern.decode("utf-8"))
 
         if exe_ctx.GetProcess().GetState() == 0:
             print_message(
