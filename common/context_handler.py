@@ -31,6 +31,8 @@ from common.util import (
     print_instruction,
     print_line,
     print_line_with_string,
+    change_use_color,
+    output_line
 )
 
 
@@ -59,12 +61,7 @@ class ContextHandler:
         self.settings = LLEFSettings()
         self.color_settings = LLEFColorSettings()
         self.state = LLEFState()
-
-    def output_line(self, line: str) -> None:
-        if self.settings.color_output is False:
-            for term_color in TERM_COLORS:
-                line = line.replace(term_color.value, "")
-        print(line)
+        change_use_color(self.settings.color_output)
 
     def generate_rebased_address_string(self, address: SBAddress) -> str:
         module = address.GetModule()
@@ -127,6 +124,7 @@ class ContextHandler:
                 line += (
                     f" {TERM_COLORS[self.color_settings.dereferenced_register_color].value}"
                     f"{GLYPHS.LEFT_ARROW.value}{reg_list}"
+                    f"{TERM_COLORS.ENDC.value}"
                 )
 
         return line
@@ -153,7 +151,7 @@ class ContextHandler:
         line += self.generate_printable_line_from_pointer(
             stack_value, addr.GetValueAsUnsigned()
         )
-        self.output_line(line)
+        output_line(line)
 
     def print_register(self, register: SBValue) -> None:
         """Print details of a @register"""
@@ -183,7 +181,7 @@ class ContextHandler:
 
         line += self.generate_printable_line_from_pointer(reg_value)
 
-        self.output_line(line)
+        output_line(line)
 
     def print_flags_register(self, flag_register: FlagRegister) -> None:
         """Format and print the contents of the flag register."""
@@ -204,7 +202,7 @@ class ContextHandler:
             ]
         )
         line += "]"
-        self.output_line(line)
+        output_line(line)
 
     def update_registers(self) -> None:
         """This updates the cached registers, which are used to track which registered have changed."""
@@ -215,7 +213,7 @@ class ContextHandler:
     def print_legend(self) -> None:
         """Print a line containing the color legend"""
 
-        self.output_line(
+        output_line(
             f"[ Legend: "
             f"{TERM_COLORS[self.color_settings.modified_register_color].value}"
             f"Modified register{TERM_COLORS.ENDC.value} | "
@@ -269,7 +267,7 @@ class ContextHandler:
             current_pc = hex(self.frame.GetPC())
             for i, item in enumerate(instructions):
                 if current_pc in item:
-                    self.output_line(instructions[0])
+                    output_line(instructions[0])
                     if i > 3:
                         print_instruction(instructions[i - 3], TERM_COLORS[self.color_settings.instruction_color])
                         print_instruction(instructions[i - 2], TERM_COLORS[self.color_settings.instruction_color])
@@ -303,7 +301,7 @@ class ContextHandler:
                             # fmt: on
                             print_instruction(instruction)
         else:
-            print("No disassembly to print")
+            output_line("No disassembly to print")
 
     def display_threads(self) -> None:
         """Print LLDB formatted thread information"""
@@ -313,7 +311,7 @@ class ContextHandler:
             string_color=TERM_COLORS[self.color_settings.section_header_color]
         )
         for thread in self.process:
-            print(thread)
+            output_line(thread)
 
     def display_trace(self) -> None:
         """
@@ -355,7 +353,7 @@ class ContextHandler:
                 frame_argument_name_color=TERM_COLORS[self.color_settings.frame_argument_name_color]
             )
 
-            self.output_line(line)
+            output_line(line)
 
     def display_context(
         self,

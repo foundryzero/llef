@@ -14,3 +14,6 @@ class LLEFState(metaclass=Singleton):
 
     # Stores patterns created by the `pattern` command
     created_patterns = []
+
+    # Stores whether color should be used
+    use_color = False

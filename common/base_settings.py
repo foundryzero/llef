@@ -4,6 +4,7 @@ import os
 
 from abc import abstractmethod
 from common.singleton import Singleton
+from common.util import output_line
 
 
 class BaseLLEFSettings(metaclass=Singleton):
@@ -46,17 +47,17 @@ class BaseLLEFSettings(metaclass=Singleton):
             self.load_default_settings()
             return
 
-        print(f"Loading LLEF settings from {self.LLEF_CONFIG_PATH}")
+        output_line(f"Loading LLEF settings from {self.LLEF_CONFIG_PATH}")
 
         self._RAW_CONFIG.read(self.LLEF_CONFIG_PATH)
 
         if not self._RAW_CONFIG.has_section(self.GLOBAL_SECTION):
             self.load_default_settings()
-            print("Settings file missing 'LLEF' section. Default settings loaded.")
+            output_line("Settings file missing 'LLEF' section. Default settings loaded.")
 
         if not self.validate_settings():
             self.load_default_settings()
-            print("Error parsing config. Default settings loaded.")
+            output_line("Error parsing config. Default settings loaded.")
 
     def list(self):
         """
@@ -64,7 +65,7 @@ class BaseLLEFSettings(metaclass=Singleton):
         """
         settings_names = self._get_setting_names()
         for setting_name in settings_names:
-            print(f"{setting_name}={getattr(self, setting_name)}")
+            output_line(f"{setting_name}={getattr(self, setting_name)}")
 
     def save(self):
         """
@@ -78,7 +79,7 @@ class BaseLLEFSettings(metaclass=Singleton):
         Set a LLEF setting
         """
         if not hasattr(self, setting):
-            print(f"Invalid LLEF setting {setting}")
+            output_line(f"Invalid LLEF setting {setting}")
 
         restore_value = getattr(self, setting)
         self._RAW_CONFIG.set(self.GLOBAL_SECTION, setting, value)
@@ -86,4 +87,4 @@ class BaseLLEFSettings(metaclass=Singleton):
         if not self.validate_settings(setting=setting):
             self._RAW_CONFIG.set(self.GLOBAL_SECTION, setting, str(restore_value))
         else:
-            print(f"Set {setting} to {getattr(self, setting)}")
+            output_line(f"Set {setting} to {getattr(self, setting)}")

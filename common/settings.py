@@ -4,6 +4,7 @@ import os
 from arch import supported_arch
 from common.singleton import Singleton
 from common.base_settings import BaseLLEFSettings
+from common.util import change_use_color, output_line
 
 
 class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
@@ -67,7 +68,7 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
 
         if setting:
             if setting not in settings_names:
-                print(f"Invalid LLEF setting {setting}")
+                output_line(f"Invalid LLEF setting {setting}")
                 return False
             settings_names = [setting]
 
@@ -78,5 +79,15 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
             except ValueError:
                 valid = False
                 raw_value = self._RAW_CONFIG.get(self.GLOBAL_SECTION, setting_name)
-                print(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
+                output_line(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
         return valid
+
+    def set(self, setting: str, value: str):
+        super().set(setting, value)
+
+        if setting == "color_output":
+            change_use_color(self.color_output)
+
+    def load(self, reset=False):
+        super().load(reset)
+        change_use_color(self.color_output)

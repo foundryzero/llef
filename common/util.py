@@ -1,11 +1,32 @@
 """Utility functions."""
 
 import os
-from typing import List
+from typing import List, Any
+import re
 
 from lldb import SBError, SBFrame, SBMemoryRegionInfo, SBMemoryRegionInfoList, SBProcess, SBValue
 
 from common.constants import ALIGN, GLYPHS, MSG_TYPE, TERM_COLORS
+from common.state import LLEFState
+
+
+def change_use_color(new_value: bool) -> None:
+    """
+    Change the global use_color bool. use_color should not be written to directly
+    """
+    LLEFState.use_color = new_value
+
+
+def output_line(line: Any) -> None:
+    """
+    Format a line of output for printing. Print should not be used elsewhere.
+    Exception - clear_page uses terminal characters intentionally, so does not pass through this
+    """
+    line = str(line)
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    if LLEFState.use_color is False:
+        line = ansi_escape.sub('', line)
+    print(line)
 
 
 def clear_page() -> None:
@@ -41,7 +62,7 @@ def print_line_with_string(
         l_pad = 4 * char.value
         r_pad = (width - len(string) - 6) * char.value
 
-    print(
+    output_line(
         f"{line_color.value}{l_pad}{TERM_COLORS.ENDC.value} "
         + f"{string_color.value}{string}{TERM_COLORS.ENDC.value} {line_color.value}{r_pad}{TERM_COLORS.ENDC.value}"
     )
@@ -51,7 +72,7 @@ def print_line(
     char: GLYPHS = GLYPHS.HORIZONTAL_LINE, color: TERM_COLORS = TERM_COLORS.GREY
 ) -> None:
     """Print a line of @char"""
-    print(
+    output_line(
         f"{color.value}{os.get_terminal_size().columns*char.value}{TERM_COLORS.ENDC.value}"
     )
 
@@ -63,18 +84,18 @@ def print_message(msg_type: MSG_TYPE, message: str) -> None:
     error_color = TERM_COLORS.GREEN
 
     if msg_type == MSG_TYPE.INFO:
-        print(f"{info_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
+        output_line(f"{info_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
     elif msg_type == MSG_TYPE.SUCCESS:
-        print(f"{success_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
+        output_line(f"{success_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
     elif msg_type == MSG_TYPE.ERROR:
-        print(f"{error_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
+        output_line(f"{error_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
 
 
 def print_instruction(line: str, color: TERM_COLORS = TERM_COLORS.ENDC) -> None:
     """Format and print a line of disassembly returned from LLDB (SBFrame.disassembly)"""
     loc_0x = line.find("0x")
     start_idx = loc_0x if loc_0x >= 0 else 0
-    print(f"{color.value}{line[start_idx:]}{TERM_COLORS.ENDC.value}")
+    output_line(f"{color.value}{line[start_idx:]}{TERM_COLORS.ENDC.value}")
 
 
 def get_registers(frame: SBFrame, frame_type: str) -> List[SBValue]:

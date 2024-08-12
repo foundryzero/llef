@@ -9,6 +9,7 @@ from lldb import (
 
 from commands.base_command import BaseCommand
 from common.context_handler import ContextHandler
+from common.util import output_line
 
 
 class ContextCommand(BaseCommand):
@@ -39,7 +40,7 @@ class ContextCommand(BaseCommand):
         """Handles the invocation of 'context' command"""
 
         if not exe_ctx.frame:
-            print("Program not running")
+            output_line("Program not running")
             return
 
         self.context_handler.display_context(exe_ctx)

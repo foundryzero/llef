@@ -7,6 +7,7 @@ from typing import List
 from common.singleton import Singleton
 from common.constants import TERM_COLORS
 from common.base_settings import BaseLLEFSettings
+from common.util import output_line
 
 
 class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
@@ -104,7 +105,7 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
 
         if setting:
             if setting not in settings_names:
-                print(f"Invalid LLEF setting {setting}")
+                output_line(f"Invalid LLEF setting {setting}")
                 return False
             settings_names = [setting]
 
@@ -117,7 +118,7 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
             except ValueError:
                 valid = False
                 raw_value = self._RAW_CONFIG.get(self.GLOBAL_SECTION, setting_name)
-                print(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
+                output_line(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
         return valid
 
     def list(self):
@@ -127,9 +128,9 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
         supported_colours_strings = []
         for color in self.supported_colors:
             supported_colours_strings.append(f"{TERM_COLORS[color].value}{color}{TERM_COLORS.ENDC.value}")
-        print(f"Supported Colors: {', '.join(supported_colours_strings)}\n")
+        output_line(f"Supported Colors: {', '.join(supported_colours_strings)}\n")
 
         settings_names = self._get_setting_names()
         for setting_name in settings_names:
             color = getattr(self, setting_name)
-            print(f"{setting_name}={TERM_COLORS[color].value}{color}{TERM_COLORS.ENDC.value}")
+            output_line(f"{setting_name}={TERM_COLORS[color].value}{color}{TERM_COLORS.ENDC.value}")
