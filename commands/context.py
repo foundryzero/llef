@@ -68,7 +68,7 @@ class ContextCommand(BaseCommand):
         self.context_handler.refresh(exe_ctx)
 
         if "all" in args.sections:
-            self.context_handler.display_context(exe_ctx)
+            self.context_handler.display_context(exe_ctx, False)
         else:
             if "registers" in args.sections:
                 self.context_handler.display_registers()

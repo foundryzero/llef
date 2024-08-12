@@ -12,6 +12,9 @@ class LLEFState(metaclass=Singleton):
     # Stores previous register state at the last breakpoint
     prev_registers: Dict[str, int] = {}
 
+    # Stores register state at the current breakpoint (caches the contents of the current frame as frame is mutable)
+    current_registers: Dict[str, int] = {}
+
     # Stores patterns created by the `pattern` command
     created_patterns = []
 
