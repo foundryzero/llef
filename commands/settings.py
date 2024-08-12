@@ -16,7 +16,7 @@ class SettingsCommand(BaseSettingsCommand):
 
     def __init__(self, debugger: SBDebugger, dictionary: Dict[Any, Any]) -> None:
         super().__init__(debugger, dictionary)
-        self.settings = LLEFSettings()
+        self.settings = LLEFSettings(debugger)
 
     @classmethod
     def get_command_parser(cls) -> argparse.ArgumentParser:

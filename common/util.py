@@ -20,7 +20,7 @@ def change_use_color(new_value: bool) -> None:
 def output_line(line: Any) -> None:
     """
     Format a line of output for printing. Print should not be used elsewhere.
-    Exception - clear_page uses terminal characters intentionally, so does not pass through this
+    Exception - clear_page would not function without terminal characters
     """
     line = str(line)
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
