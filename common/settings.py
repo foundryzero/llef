@@ -66,6 +66,10 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     def rebase_offset(self):
         return self._RAW_CONFIG.getint(self.GLOBAL_SECTION, "rebase_offset", fallback=0x100000)
 
+    @property
+    def show_all_registers(self):
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_all_registers", fallback=False)
+
     def validate_settings(self, setting=None) -> bool:
         """
         Validate settings by attempting to retrieve all properties thus executing any ConfigParser coverters
