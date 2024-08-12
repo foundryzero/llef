@@ -58,7 +58,7 @@ class ContextHandler:
         For up to date documentation on args provided to this function run: `help target stop-hook add`
         """
         self.debugger = debugger
-        self.settings = LLEFSettings()
+        self.settings = LLEFSettings(debugger)
         self.color_settings = LLEFColorSettings()
         self.state = LLEFState()
         change_use_color(self.settings.color_output)

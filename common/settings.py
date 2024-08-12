@@ -6,6 +6,8 @@ from common.singleton import Singleton
 from common.base_settings import BaseLLEFSettings
 from common.util import change_use_color, output_line
 
+from lldb import SBDebugger
+
 
 class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     """
@@ -14,10 +16,14 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
 
     LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef")
     GLOBAL_SECTION = "LLEF"
+    debugger: SBDebugger = None
 
     @property
     def color_output(self):
-        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "color_output", fallback=True)
+        default = False
+        if self.debugger is not None:
+            default = self.debugger.GetUseColor()
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "color_output", fallback=default)
 
     @property
     def register_coloring(self):
@@ -75,12 +81,24 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
         valid = True
         for setting_name in settings_names:
             try:
-                getattr(self, setting_name)
+                value = getattr(self, setting_name)
+                if (
+                    setting_name == "color_output"
+                    and value is True
+                    and self.debugger is not None
+                    and self.debugger.GetUseColor() is False
+                ):
+                    print("Colour is not supported by your terminal")
+                    raise ValueError
             except ValueError:
                 valid = False
                 raw_value = self._RAW_CONFIG.get(self.GLOBAL_SECTION, setting_name)
                 output_line(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
         return valid
+
+    def __init__(self, debugger: SBDebugger):
+        super().__init__()
+        self.debugger = debugger
 
     def set(self, setting: str, value: str):
         super().set(setting, value)
