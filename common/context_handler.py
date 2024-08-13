@@ -205,11 +205,15 @@ class ContextHandler:
         output_line(line)
 
     def update_registers(self) -> None:
-        """This updates the cached registers, which are used to track which registered have changed."""
-
-        for reg_set in self.frame.registers:
-            for reg in reg_set:
-                self.state.prev_registers[reg.GetName()] = reg.GetValueAsUnsigned()
+        """
+        This updates the cached registers, which are used to track which registered have changed.
+        If there is no frame currently then the previous registers do not change
+        """
+        self.state.prev_registers = self.state.current_registers.copy()
+        if self.frame is not None:
+            for reg_set in self.frame.registers:
+                for reg in reg_set:
+                    self.state.current_registers[reg.GetName()] = reg.GetValueAsUnsigned()
 
     def print_legend(self) -> None:
         """Print a line containing the color legend"""
@@ -368,7 +372,7 @@ class ContextHandler:
 
             output_line(line)
 
-    def refresh(self, exe_ctx: SBExecutionContext)-> None:
+    def refresh(self, exe_ctx: SBExecutionContext) -> None:
         """Refresh stored values"""
         self.frame = exe_ctx.GetFrame()
         self.process = exe_ctx.GetProcess()
@@ -387,11 +391,16 @@ class ContextHandler:
     def display_context(
         self,
         exe_ctx: SBExecutionContext,
+        update_registers: bool
     ) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""
 
         # Refresh frame, process, target, and thread objects at each stop.
         self.refresh(exe_ctx)
+
+        # Update current and previous registers
+        if update_registers:
+            self.update_registers()
 
         # Hack to print cursor at the top of the screen
         clear_page()
@@ -415,5 +424,3 @@ class ContextHandler:
             self.display_trace()
 
         print_line(color=TERM_COLORS[self.color_settings.line_color])
-
-        self.update_registers()
