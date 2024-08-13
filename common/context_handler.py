@@ -283,7 +283,7 @@ class ContextHandler:
 
             current_pc = hex(self.frame.GetPC())
             for i, item in enumerate(instructions):
-                if current_pc in item:
+                if current_pc in item.split(':')[0]:
                     output_line(instructions[0])
                     if i > 3:
                         print_instruction(instructions[i - 3], TERM_COLORS[self.color_settings.instruction_color])
