@@ -29,22 +29,12 @@ class ContextCommand(BaseCommand):
     def get_command_parser(cls) -> argparse.ArgumentParser:
         """Get the command parser."""
         parser = argparse.ArgumentParser(description="context command")
-        subparsers = parser.add_subparsers()
-
-        registers_parser = subparsers.add_parser("registers", help="show registers")
-        registers_parser.set_defaults(action="registers")
-
-        stack_parser = subparsers.add_parser("stack", help="show stack")
-        stack_parser.set_defaults(action="stack")
-
-        code_parser = subparsers.add_parser("code", help="show code")
-        code_parser.set_defaults(action="code")
-
-        threads_parser = subparsers.add_parser("threads", help="show threads")
-        threads_parser.set_defaults(action="threads")
-
-        trace_parser = subparsers.add_parser("trace", help="show trace")
-        trace_parser.set_defaults(action="trace")
+        parser.add_argument(
+            "sections",
+            nargs="*",
+            choices=["registers", "stack", "code", "threads", "trace", "all"],
+            default="all"
+        )
 
         return parser
 
@@ -71,18 +61,22 @@ class ContextCommand(BaseCommand):
 
         args = self.parser.parse_args(shlex.split(command))
 
-        if not hasattr(args, "action"):
-            self.context_handler.display_context(exe_ctx)
+        if not hasattr(args, "sections"):
+            output_line(self.__class__.get_long_help())
             return
-        
+
         self.context_handler.refresh(exe_ctx)
-        if args.action == "registers":
-            self.context_handler.display_registers()
-        elif args.action == "stack":
-            self.context_handler.display_stack()
-        elif args.action == "code":
-            self.context_handler.display_code()
-        elif args.action == "threads":
-            self.context_handler.display_threads()
-        elif args.action == "trace":
-            self.context_handler.display_trace()
+
+        if "all" in args.sections:
+            self.context_handler.display_context(exe_ctx)
+        else:
+            if "registers" in args.sections:
+                self.context_handler.display_registers()
+            if "stack" in args.sections:
+                self.context_handler.display_stack()
+            if "code" in args.sections:
+                self.context_handler.display_code()
+            if "threads" in args.sections:
+                self.context_handler.display_threads()
+            if "trace" in args.sections:
+                self.context_handler.display_trace()

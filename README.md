@@ -117,6 +117,10 @@ Refresh the LLEF GUI with:
 ```
 (lldb) context
 ```
+Refresh components of the LLEF GUI with:
+```
+(lldb) context [{registers,stack,code,threads,trace,all} ...]
+```
 
 #### Pattern Create
 ```
