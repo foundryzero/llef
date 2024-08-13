@@ -368,13 +368,8 @@ class ContextHandler:
 
             output_line(line)
 
-    def display_context(
-        self,
-        exe_ctx: SBExecutionContext,
-    ) -> None:
-        """For up to date documentation on args provided to this function run: `help target stop-hook add`"""
-
-        # Refresh frame, process, target, and thread objects at each stop.
+    def refresh(self, exe_ctx: SBExecutionContext)-> None:
+        """Refresh stored values"""
         self.frame = exe_ctx.GetFrame()
         self.process = exe_ctx.GetProcess()
         self.target = exe_ctx.GetTarget()
@@ -388,6 +383,15 @@ class ContextHandler:
             self.regions = self.process.GetMemoryRegions()
         else:
             self.regions = None
+
+    def display_context(
+        self,
+        exe_ctx: SBExecutionContext,
+    ) -> None:
+        """For up to date documentation on args provided to this function run: `help target stop-hook add`"""
+
+        # Refresh frame, process, target, and thread objects at each stop.
+        self.refresh(exe_ctx)
 
         # Hack to print cursor at the top of the screen
         clear_page()
