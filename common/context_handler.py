@@ -1,6 +1,7 @@
 import os
 
 from typing import Dict, Type, Optional
+from string import printable
 
 from lldb import (
     SBAddress,
@@ -152,6 +153,55 @@ class ContextHandler:
             stack_value, addr.GetValueAsUnsigned()
         )
         output_line(line)
+
+    def print_memory_address(self, addr: int, offset: int, size: int) -> None:
+        """Print a line containing information about @size bytes at @addr displaying @offset"""
+        # Add address to line
+        line = (
+            f"{TERM_COLORS[self.color_settings.read_memory_address_color].value}{hex(addr)}"
+            + f"{TERM_COLORS.ENDC.value}{GLYPHS.VERTICAL_LINE.value}"
+        )
+        # Add offset to line
+        line += f"+{offset:04x}: "
+
+        # Add value to line
+        err = SBError()
+        memory_value = int.from_bytes(self.process.ReadMemory(addr, size, err), 'little')
+        if err.Success():
+            line += f"0x{memory_value:0{size * 2}x}"
+        else:
+            line += str(err)
+
+        output_line(line)
+
+    def print_bytes(self, addr: int, size: int) -> None:
+        """Print a line containing information about @size individual bytes at @addr"""
+        if size > 0:
+            # Add address to line
+            line = (
+                f"{TERM_COLORS[self.color_settings.read_memory_address_color].value}{hex(addr)}"
+                + f"{TERM_COLORS.ENDC.value}    "
+            )
+
+            # Add value to line
+            err = SBError()
+            memory_value: bytes = self.process.ReadMemory(addr, size, err)
+            if err.Success():
+                line += f"{memory_value.hex(' '):47}    "
+
+                # Add characters to line
+                characters = ""
+                for byte in memory_value:
+                    if chr(byte) in printable.strip():
+                        characters += chr(byte)
+                    else:
+                        characters += "."
+
+                line += characters
+            else:
+                line += str(err)
+
+            output_line(line)
 
     def print_register(self, register: SBValue) -> None:
         """Print details of a @register"""
