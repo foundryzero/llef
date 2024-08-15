@@ -90,6 +90,10 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
     @property
     def frame_argument_name_color(self):
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "frame_argument_name_color", fallback="YELLOW").upper()
+    
+    @property
+    def read_memory_address_color(self):
+        return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "read_memory_address_color", fallback="CYAN").upper()
 
     def __init__(self):
         self.supported_colors = [color.name for color in TERM_COLORS]

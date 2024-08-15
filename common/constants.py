@@ -43,3 +43,12 @@ class ALIGN(Enum):
     LEFT = 1
     CENTRE = 2
     RIGHT = 3
+
+
+class SIZES(Enum):
+    """Size of data types"""
+
+    QWORD = 8
+    DWORD = 4
+    WORD = 2
+    BYTE = 1

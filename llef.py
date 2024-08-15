@@ -24,6 +24,7 @@ from commands.pattern import (
 from commands.context import ContextCommand
 from commands.settings import SettingsCommand
 from commands.color_settings import ColorSettingsCommand
+from commands.hexdump import HexdumpCommand
 from handlers.stop_hook import StopHookHandler
 
 
@@ -34,7 +35,8 @@ def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
         PatternSearchCommand,
         ContextCommand,
         SettingsCommand,
-        ColorSettingsCommand
+        ColorSettingsCommand,
+        HexdumpCommand
     ]
 
     handlers = [StopHookHandler]

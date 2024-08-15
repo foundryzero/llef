@@ -90,7 +90,7 @@ set                 Set LLEF color settings
 Supported colors: BLUE, GREEN, YELLOW, RED, PINK, CYAN, GREY
 
 | Color                         |
-|-------------------------------|
+| ----------------------------- |
 | register_color                |
 | modified_register_color       |
 | code_color                    |
@@ -109,7 +109,38 @@ Supported colors: BLUE, GREEN, YELLOW, RED, PINK, CYAN, GREY
 | dereferenced_value_color      |
 | dereferenced_register_color   |
 | frame_argument_name_color     |
+| read_memory_address_color     |
 
+#### Hexdump
+View memory contents with:
+```
+(lldb) hexdump type address [--size SIZE] [--reverse]
+```
+e.g.
+```
+(lldb) hexdump byte 0x7fffffffecc8 --size 0x38
+0x7fffffffecc8    3d 2f 75 73 72 2f 6c 6f 63 61 6c 2f 73 62 69 6e    =/usr/local/sbin
+0x7fffffffecd8    3a 2f 75 73 72 2f 6c 6f 63 61 6c 2f 62 69 6e 3a    :/usr/local/bin:
+0x7fffffffece8    2f 75 73 72 2f 73 62 69 6e 3a 2f 75 73 72 2f 62    /usr/sbin:/usr/b
+0x7fffffffecf8    69 6e 3a 2f 73 62 69 6e                            in:/sbin
+(lldb) hexdump word 0x7fffffffecc8 --reverse
+0x7fffffffece6│+001e: 0x4654
+0x7fffffffece4│+001c: 0x4361
+0x7fffffffece2│+001a: 0x746f
+0x7fffffffece0│+0018: 0x4e23
+0x7fffffffecde│+0016: 0x3f73
+0x7fffffffecdc│+0014: 0x6968
+0x7fffffffecda│+0012: 0x742d
+0x7fffffffecd8│+0010: 0x6564
+0x7fffffffecd6│+000e: 0x6f63
+0x7fffffffecd4│+000c: 0x6564
+0x7fffffffecd2│+000a: 0x2d75
+0x7fffffffecd0│+0008: 0x6f79
+0x7fffffffecce│+0006: 0x2d64
+0x7fffffffeccc│+0004: 0x6964
+0x7fffffffecca│+0002: 0x2d79
+0x7fffffffecc8│+0000: 0x6857
+```
 
 #### Context
 
