@@ -1,8 +1,8 @@
 """Utility functions."""
 
-import os
 from typing import List, Any
 import re
+import shutil
 
 from lldb import SBError, SBFrame, SBMemoryRegionInfo, SBMemoryRegionInfoList, SBProcess, SBValue
 
@@ -34,7 +34,7 @@ def clear_page() -> None:
     Used to clear the previously printed breakpoint information before
     printing the next information.
     """
-    num_lines = os.get_terminal_size().lines
+    num_lines = shutil.get_terminal_size().lines
     for _ in range(num_lines):
         print()
     print("\033[0;0H")  # Ansi escape code: Set cursor to 0,0 position
@@ -49,7 +49,7 @@ def print_line_with_string(
     align: ALIGN = ALIGN.RIGHT,
 ) -> None:
     """Print a line with the provided @string padded with @char"""
-    width = os.get_terminal_size().columns
+    width = shutil.get_terminal_size().columns
     if align == ALIGN.RIGHT:
         l_pad = (width - len(string) - 6) * char.value
         r_pad = 4 * char.value
@@ -73,7 +73,7 @@ def print_line(
 ) -> None:
     """Print a line of @char"""
     output_line(
-        f"{color.value}{os.get_terminal_size().columns*char.value}{TERM_COLORS.ENDC.value}"
+        f"{color.value}{shutil.get_terminal_size().columns*char.value}{TERM_COLORS.ENDC.value}"
     )
 
 
