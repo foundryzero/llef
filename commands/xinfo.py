@@ -114,6 +114,8 @@ class XinfoCommand(BaseCommand):
 
         if xinfo[XINFO.PATH] is not None and os.path.exists(xinfo[XINFO.PATH]):
             xinfo[XINFO.INODE] = os.stat(xinfo[XINFO.PATH]).st_ino
+        else:
+            xinfo[XINFO.INODE] = None
 
         return xinfo
 
@@ -149,7 +151,7 @@ class XinfoCommand(BaseCommand):
             print_message(MSG_TYPE.INFO, f"Pathname: {xinfo[XINFO.PATH]}")
             print_message(MSG_TYPE.INFO, f"Offset (from page/region): +{hex(xinfo[XINFO.REGION_OFFSET])}")
 
-            if xinfo["inode"] is not None:
+            if xinfo[XINFO.INODE] is not None:
                 print_message(MSG_TYPE.INFO, f"Inode: {xinfo[XINFO.INODE]}")
             else:
                 print_message(MSG_TYPE.ERROR, "No inode found: Path cannot be found locally.")
