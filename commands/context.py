@@ -1,13 +1,10 @@
 """Context command class."""
+
 import argparse
 import shlex
 from typing import Any, Dict
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
-from lldb import (
-    SBDebugger,
-    SBExecutionContext,
-)
 
 from commands.base_command import BaseCommand
 from common.context_handler import ContextHandler
@@ -30,10 +27,7 @@ class ContextCommand(BaseCommand):
         """Get the command parser."""
         parser = argparse.ArgumentParser(description="context command")
         parser.add_argument(
-            "sections",
-            nargs="*",
-            choices=["registers", "stack", "code", "threads", "trace", "all"],
-            default="all"
+            "sections", nargs="*", choices=["registers", "stack", "code", "threads", "trace", "all"], default="all"
         )
 
         return parser

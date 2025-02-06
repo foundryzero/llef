@@ -1,4 +1,5 @@
 """x86_64 architecture definition."""
+
 from arch.base_arch import BaseArch, FlagRegister
 
 
@@ -51,5 +52,5 @@ class X86_64(BaseArch):
     # rflags and eflags bit masks are identical for the lower 32-bits
     flag_registers = [
         FlagRegister("rflags", _eflag_register_bit_masks),
-        FlagRegister("eflags", _eflag_register_bit_masks)
+        FlagRegister("eflags", _eflag_register_bit_masks),
     ]

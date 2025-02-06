@@ -1,11 +1,12 @@
 """llefsettings command class."""
+
 import argparse
 from typing import Any, Dict
 
 from lldb import SBDebugger
 
-from common.settings import LLEFSettings
 from commands.base_settings import BaseSettingsCommand
+from common.settings import LLEFSettings
 
 
 class SettingsCommand(BaseSettingsCommand):

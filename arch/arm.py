@@ -47,6 +47,4 @@ class Arm(BaseArch):
         "t": 0x20,
     }
 
-    flag_registers = [
-        FlagRegister("cpsr", _cpsr_register_bit_masks)
-    ]
+    flag_registers = [FlagRegister("cpsr", _cpsr_register_bit_masks)]

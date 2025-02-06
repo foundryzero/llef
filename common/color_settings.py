@@ -1,12 +1,11 @@
 """Color settings module"""
-import configparser
-import os
 
+import os
 from typing import List
 
-from common.singleton import Singleton
-from common.constants import TERM_COLORS
 from common.base_settings import BaseLLEFSettings
+from common.constants import TERM_COLORS
+from common.singleton import Singleton
 from common.util import output_line
 
 
@@ -14,7 +13,8 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
     """
     Color settings class - loaded from file defined in `LLEF_CONFIG_PATH`
     """
-    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef_colors")
+
+    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".llef_colors")
     GLOBAL_SECTION = "LLEF"
 
     supported_colors: List[str] = []
@@ -90,7 +90,7 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
     @property
     def frame_argument_name_color(self):
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "frame_argument_name_color", fallback="YELLOW").upper()
-    
+
     @property
     def read_memory_address_color(self):
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "read_memory_address_color", fallback="CYAN").upper()

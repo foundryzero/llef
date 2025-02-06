@@ -1,8 +1,9 @@
 """Base settings command class."""
+
 import argparse
 import shlex
-from typing import Any, Dict
 from abc import ABC, abstractmethod
+from typing import Any, Dict
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 

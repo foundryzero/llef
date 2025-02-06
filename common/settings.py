@@ -1,12 +1,13 @@
 """Global settings module"""
+
 import os
 
-from arch import supported_arch
-from common.singleton import Singleton
-from common.base_settings import BaseLLEFSettings
-from common.util import change_use_color, output_line
-
 from lldb import SBDebugger
+
+from arch import supported_arch
+from common.base_settings import BaseLLEFSettings
+from common.singleton import Singleton
+from common.util import change_use_color, output_line
 
 
 class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
@@ -14,7 +15,7 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     Global general settings class - loaded from file defined in `LLEF_CONFIG_PATH`
     """
 
-    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef")
+    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".llef")
     GLOBAL_SECTION = "LLEF"
     debugger: SBDebugger = None
 

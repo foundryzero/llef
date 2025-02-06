@@ -52,8 +52,6 @@ class BaseCommand(ABC):
         if cls.container is not None:
             command = f"command script add -c {module_name}.{cls.__name__} {cls.container.container_verb} {cls.program}"
         else:
-            command = (
-                f"command script add -c {module_name}.{cls.__name__} {cls.program}"
-            )
+            command = f"command script add -c {module_name}.{cls.__name__} {cls.program}"
 
         debugger.HandleCommand(command)

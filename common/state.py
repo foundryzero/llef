@@ -1,4 +1,5 @@
 """Global state module"""
+
 from typing import Dict
 
 from common.singleton import Singleton

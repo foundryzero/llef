@@ -1,4 +1,5 @@
 """i386 architecture definition."""
+
 from arch.base_arch import BaseArch, FlagRegister
 
 
@@ -47,5 +48,5 @@ class I386(BaseArch):
 
     flag_registers = [
         FlagRegister("eflags", _eflags_register_bit_masks),
-        FlagRegister("rflags", _eflags_register_bit_masks)
+        FlagRegister("rflags", _eflags_register_bit_masks),
     ]

@@ -1,4 +1,5 @@
 """Hexdump command class."""
+
 import argparse
 import shlex
 from typing import Any, Dict
@@ -6,8 +7,8 @@ from typing import Any, Dict
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_command import BaseCommand
-from common.context_handler import ContextHandler
 from common.constants import SIZES
+from common.context_handler import ContextHandler
 
 
 class HexdumpCommand(BaseCommand):
@@ -27,21 +28,16 @@ class HexdumpCommand(BaseCommand):
         """Get the command parser."""
         parser = argparse.ArgumentParser()
         parser.add_argument(
-            "type",
-            choices=["qword", "dword", "word", "byte"],
-            default="byte",
-            help="The format for presenting data"
+            "type", choices=["qword", "dword", "word", "byte"], default="byte", help="The format for presenting data"
         )
         parser.add_argument(
-            "--reverse",
-            action="store_true",
-            help="The direction of output lines. Low to high by default"
+            "--reverse", action="store_true", help="The direction of output lines. Low to high by default"
         )
-        parser.add_argument("--size", type=positive_int, default=16, help="The number of qword/dword/word/bytes to display")
         parser.add_argument(
-            "address",
-            type=hex_int,
-            help="A value/address/symbol used as the location to print the hexdump from"
+            "--size", type=positive_int, default=16, help="The number of qword/dword/word/bytes to display"
+        )
+        parser.add_argument(
+            "address", type=hex_int, help="A value/address/symbol used as the location to print the hexdump from"
         )
         return parser
 
@@ -71,7 +67,7 @@ class HexdumpCommand(BaseCommand):
 
         self.context_handler.refresh(exe_ctx)
 
-        start = (size-1) * divisions if args.reverse else 0
+        start = (size - 1) * divisions if args.reverse else 0
         end = -divisions if args.reverse else size * divisions
         step = -divisions if args.reverse else divisions
 

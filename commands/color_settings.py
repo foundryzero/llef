@@ -1,11 +1,12 @@
 """llefcolorsettings command class."""
+
 import argparse
 from typing import Any, Dict
 
 from lldb import SBDebugger
 
-from common.color_settings import LLEFColorSettings
 from commands.base_settings import BaseSettingsCommand
+from common.color_settings import LLEFColorSettings
 
 
 class ColorSettingsCommand(BaseSettingsCommand):

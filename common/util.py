@@ -1,8 +1,8 @@
 """Utility functions."""
 
 import os
-from typing import List, Any
 import re
+from typing import Any, List
 
 from lldb import SBError, SBFrame, SBMemoryRegionInfo, SBMemoryRegionInfoList, SBProcess, SBValue
 
@@ -23,9 +23,9 @@ def output_line(line: Any) -> None:
     Exception - clear_page would not function without terminal characters
     """
     line = str(line)
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
     if LLEFState.use_color is False:
-        line = ansi_escape.sub('', line)
+        line = ansi_escape.sub("", line)
     print(line)
 
 
@@ -68,13 +68,9 @@ def print_line_with_string(
     )
 
 
-def print_line(
-    char: GLYPHS = GLYPHS.HORIZONTAL_LINE, color: TERM_COLORS = TERM_COLORS.GREY
-) -> None:
+def print_line(char: GLYPHS = GLYPHS.HORIZONTAL_LINE, color: TERM_COLORS = TERM_COLORS.GREY) -> None:
     """Print a line of @char"""
-    output_line(
-        f"{color.value}{os.get_terminal_size().columns*char.value}{TERM_COLORS.ENDC.value}"
-    )
+    output_line(f"{color.value}{os.get_terminal_size().columns * char.value}{TERM_COLORS.ENDC.value}")
 
 
 def print_message(msg_type: MSG_TYPE, message: str) -> None:
@@ -128,15 +124,11 @@ def get_frame_arguments(frame: SBFrame, frame_argument_name_color: TERM_COLORS) 
                 value = f"{int(var.GetValue(), 0):#x}"
             except ValueError:
                 pass
-        args.append(
-            f"{frame_argument_name_color.value}{var.GetName()}{TERM_COLORS.ENDC.value}={value}"
-        )
+        args.append(f"{frame_argument_name_color.value}{var.GetName()}{TERM_COLORS.ENDC.value}={value}")
     return f"({' '.join(args)})"
 
 
-def attempt_to_read_string_from_memory(
-    process: SBProcess, addr: SBValue, buffer_size: int = 256
-) -> str:
+def attempt_to_read_string_from_memory(process: SBProcess, addr: SBValue, buffer_size: int = 256) -> str:
     """
     Returns a string from a memory address if one can be read, else an empty string
     """
@@ -178,7 +170,7 @@ def is_stack(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoLi
 def is_heap(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to the heap"""
     if regions is None:
-        return False    
+        return False
     region = SBMemoryRegionInfo()
     heap_bool = False
     if regions.GetMemoryRegionContainingAddress(address, region):
