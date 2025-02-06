@@ -16,10 +16,11 @@ from common.constants import (
     PERMISSION_SET,
     PROGRAM_HEADER_TYPE,
     SECURITY_CHECK,
+    SECURITY_FEATURE,
     TERM_COLORS,
 )
 from common.context_handler import ContextHandler
-from common.output_util import output_line, print_message
+from common.output_util import color_string, output_line, print_message
 from common.util import check_elf, check_target, read_program_int
 
 PROGRAM_HEADER_OFFSET_32BIT_OFFSET = 0x1C
@@ -125,6 +126,90 @@ class ChecksecCommand(BaseCommand):
 
         return target_entry_value
 
+    def check_security(self, target: SBTarget) -> Dict[str, SECURITY_CHECK]:
+        """
+        Checks the following security features on the target executable:
+         - Stack Canary
+         - NX Support
+         - PIE Support
+         - RPath
+         - RunPath
+         - Full/Partial RelRO
+
+        :param target: The target executable.
+        :return: A dictionary showing whether each security feature is enabled or disabled.
+        """
+        checks = {
+            SECURITY_FEATURE.STACK_CANARY: SECURITY_CHECK.NO,
+            SECURITY_FEATURE.NX_SUPPORT: SECURITY_CHECK.UNKNOWN,
+            SECURITY_FEATURE.PIE_SUPPORT: SECURITY_CHECK.UNKNOWN,
+            SECURITY_FEATURE.NO_RPATH: SECURITY_CHECK.UNKNOWN,
+            SECURITY_FEATURE.NO_RUNPATH: SECURITY_CHECK.UNKNOWN,
+            SECURITY_FEATURE.PARTIAL_RELRO: SECURITY_CHECK.UNKNOWN,
+            SECURITY_FEATURE.FULL_RELRO: SECURITY_CHECK.UNKNOWN,
+        }
+
+        # Check for Stack Canary
+        for symbol in target.GetModuleAtIndex(0):
+            if symbol.GetName() in ["__stack_chk_fail", "__stack_chk_guard", "__intel_security_cookie"]:
+                checks[SECURITY_FEATURE.STACK_CANARY] = SECURITY_CHECK.YES
+                break
+
+        # Check for NX Support
+        try:
+            if self.get_program_header_permission(target, PROGRAM_HEADER_TYPE.GNU_STACK) in PERMISSION_SET.NOT_EXEC:
+                checks[SECURITY_FEATURE.NX_SUPPORT] = SECURITY_CHECK.YES
+            else:
+                checks[SECURITY_FEATURE.NX_SUPPORT] = SECURITY_CHECK.NO
+        except MemoryError as error:
+            print_message(MSG_TYPE.ERROR, error)
+            checks[SECURITY_FEATURE.NX_SUPPORT] = SECURITY_CHECK.UNKNOWN
+
+        # Check for PIE Support
+        try:
+            if self.get_executable_type(target) == EXECUTABLE_TYPE.DYN:
+                checks[SECURITY_FEATURE.PIE_SUPPORT] = SECURITY_CHECK.YES
+            else:
+                checks[SECURITY_FEATURE.PIE_SUPPORT] = SECURITY_CHECK.NO
+        except MemoryError as error:
+            print_message(MSG_TYPE.ERROR, error)
+            checks[SECURITY_FEATURE.PIE_SUPPORT] = SECURITY_CHECK.UNKNOWN
+
+        # Check for Partial RelRO
+        try:
+            if self.get_program_header_permission(target, PROGRAM_HEADER_TYPE.GNU_RELRO) is not None:
+                checks[SECURITY_FEATURE.PARTIAL_RELRO] = SECURITY_CHECK.YES
+            else:
+                checks[SECURITY_FEATURE.PARTIAL_RELRO] = SECURITY_CHECK.NO
+        except MemoryError as error:
+            print_message(MSG_TYPE.ERROR, error)
+            checks[SECURITY_FEATURE.PARTIAL_RELRO] = SECURITY_CHECK.UNKNOWN
+
+        # Check for Full RelRO
+        if checks[SECURITY_FEATURE.PARTIAL_RELRO] == SECURITY_CHECK.UNKNOWN:
+            checks[SECURITY_FEATURE.FULL_RELRO] = SECURITY_CHECK.UNKNOWN
+        elif (
+            self.get_dynamic_entry(target, DYNAMIC_ENTRY_TYPE.FLAGS) == DYNAMIC_ENTRY_VALUE.BIND_NOW
+            and checks[SECURITY_FEATURE.PARTIAL_RELRO] == SECURITY_CHECK.YES
+        ):
+            checks[SECURITY_FEATURE.FULL_RELRO] = SECURITY_CHECK.YES
+        else:
+            checks[SECURITY_FEATURE.FULL_RELRO] = SECURITY_CHECK.NO
+
+        # Check for No RPath
+        if self.get_dynamic_entry(target, DYNAMIC_ENTRY_TYPE.RPATH) is None:
+            checks[SECURITY_FEATURE.NO_RPATH] = SECURITY_CHECK.YES
+        else:
+            checks[SECURITY_FEATURE.NO_RPATH] = SECURITY_CHECK.NO
+
+        # Check for No RunPath
+        if self.get_dynamic_entry(target, DYNAMIC_ENTRY_TYPE.RUNPATH) is None:
+            checks[SECURITY_FEATURE.NO_RUNPATH] = SECURITY_CHECK.YES
+        else:
+            checks[SECURITY_FEATURE.NO_RUNPATH] = SECURITY_CHECK.NO
+
+        return checks
+
     @check_target
     @check_elf
     def __call__(
@@ -139,75 +224,15 @@ class ChecksecCommand(BaseCommand):
         self.context_handler.refresh(exe_ctx)
 
         target = exe_ctx.GetTarget()
-
-        checks = {
-            "Canary": SECURITY_CHECK.NO,
-            "NX Support": SECURITY_CHECK.UNKNOWN,
-            "PIE Support": SECURITY_CHECK.UNKNOWN,
-            "No RPath": SECURITY_CHECK.UNKNOWN,
-            "No RunPath": SECURITY_CHECK.UNKNOWN,
-            "Partial RelRO": SECURITY_CHECK.UNKNOWN,
-            "Full RelRO": SECURITY_CHECK.UNKNOWN,
-        }
-
-        for symbol in target.GetModuleAtIndex(0):
-            if symbol.GetName() in ["__stack_chk_fail", "__stack_chk_guard", "__intel_security_cookie"]:
-                checks["Canary"] = SECURITY_CHECK.YES
-                break
-
-        try:
-            if self.get_program_header_permission(target, PROGRAM_HEADER_TYPE.GNU_STACK) in PERMISSION_SET.NOT_EXEC:
-                checks["NX Support"] = SECURITY_CHECK.YES
-            else:
-                checks["NX Support"] = SECURITY_CHECK.NO
-        except MemoryError as error:
-            print_message(MSG_TYPE.ERROR, error)
-            checks["NX Support"] = SECURITY_CHECK.UNKNOWN
-
-        try:
-            if self.get_program_header_permission(target, PROGRAM_HEADER_TYPE.GNU_RELRO) is not None:
-                checks["Partial RelRO"] = SECURITY_CHECK.YES
-            else:
-                checks["Partial RelRO"] = SECURITY_CHECK.NO
-        except MemoryError as error:
-            print_message(MSG_TYPE.ERROR, error)
-            checks["Partial RelRO"] = SECURITY_CHECK.UNKNOWN
-
-        try:
-            if self.get_executable_type(target) == EXECUTABLE_TYPE.DYN:
-                checks["PIE Support"] = SECURITY_CHECK.YES
-            else:
-                checks["PIE Support"] = SECURITY_CHECK.NO
-        except MemoryError as error:
-            print_message(MSG_TYPE.ERROR, error)
-            checks["PIE Support"] = SECURITY_CHECK.UNKNOWN
-
-        if checks["Partial RelRO"] == SECURITY_CHECK.UNKNOWN:
-            checks["Full RelRO"] = SECURITY_CHECK.UNKNOWN
-        elif (
-            self.get_dynamic_entry(target, DYNAMIC_ENTRY_TYPE.FLAGS) == DYNAMIC_ENTRY_VALUE.BIND_NOW
-            and checks["Partial RelRO"] == SECURITY_CHECK.YES
-        ):
-            checks["Full RelRO"] = SECURITY_CHECK.YES
-        else:
-            checks["Full RelRO"] = SECURITY_CHECK.NO
-
-        if self.get_dynamic_entry(target, DYNAMIC_ENTRY_TYPE.RPATH) is None:
-            checks["No RPath"] = SECURITY_CHECK.YES
-        else:
-            checks["No RPath"] = SECURITY_CHECK.NO
-
-        if self.get_dynamic_entry(target, DYNAMIC_ENTRY_TYPE.RUNPATH) is None:
-            checks["No RunPath"] = SECURITY_CHECK.YES
-        else:
-            checks["No RunPath"] = SECURITY_CHECK.NO
+        checks = self.check_security(target)
 
         for check, status in checks.items():
             if status == SECURITY_CHECK.YES:
-                color = TERM_COLORS.GREEN.value
+                color = TERM_COLORS.GREEN.name
             elif status == SECURITY_CHECK.NO:
-                color = TERM_COLORS.RED.value
+                color = TERM_COLORS.RED.name
             else:
-                color = TERM_COLORS.GREY.value
-            check += ": "
-            output_line(f"{check:<20} {color}{status.value}{TERM_COLORS.ENDC.value}")
+                color = TERM_COLORS.GREY.name
+            check_value_string = check.value + ": "
+            line = color_string(status.value, color, lwrap=f"{check_value_string:<20}")
+            output_line(line)

@@ -54,6 +54,26 @@ class SIZES(Enum):
     BYTE = 1
 
 
+class XINFO(Enum):
+    REGION_START = "Region Start"
+    REGION_END = "Region End"
+    REGION_SIZE = "Region Size"
+    REGION_OFFSET = "Region Offset"
+    PERMISSIONS = "Permissions"
+    PATH = "Path"
+    INODE = "INode"
+
+
+class SECURITY_FEATURE(Enum):
+    STACK_CANARY = "Stack Canary"
+    NX_SUPPORT = "NX Support"
+    PIE_SUPPORT = "PIE Support"
+    NO_RPATH = "No RPath"
+    NO_RUNPATH = "No RunPath"
+    PARTIAL_RELRO = "Partial RelRO"
+    FULL_RELRO = "Full RelRO"
+
+
 class SECURITY_CHECK(Enum):
     NO = "No"
     YES = "Yes"

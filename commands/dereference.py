@@ -2,7 +2,7 @@
 
 import argparse
 import shlex
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from lldb import (
     SBAddress,
@@ -18,9 +18,9 @@ from lldb import (
 
 from commands.base_command import BaseCommand
 from common.color_settings import LLEFColorSettings
-from common.constants import GLYPHS, MSG_TYPE, TERM_COLORS
+from common.constants import GLYPHS, TERM_COLORS
 from common.context_handler import ContextHandler
-from common.output_util import color_string, output_line, print_message
+from common.output_util import color_string, output_line
 from common.state import LLEFState
 from common.util import attempt_to_read_string_from_memory, check_process, hex_int, hex_or_str, is_code, positive_int
 
@@ -112,9 +112,7 @@ class DereferenceCommand(BaseCommand):
             if string != "":
                 data[-1] = color_string(string, self.color_settings.string_color)
 
-    def dereference(
-        self, address: int, offset: int, target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList
-    ):
+    def dereference(self, address: int, target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList) -> List:
         """
         Dereference a memory @address until it reaches data that cannot be resolved to an address.
         Memory data at the last address is either disassembled to an instruction or converted to a string or neither.
@@ -134,21 +132,24 @@ class DereferenceCommand(BaseCommand):
             data.append(address)
             address = process.ReadPointerFromMemory(address, error)
             if len(data) > 1 and data[-1] in data[:-2]:
-                data.append("[LOOPING]")
+                data.append(color_string("[LOOPING]", TERM_COLORS.GREY.name))
                 break
 
         if len(data) < 2:
-            print_message(MSG_TYPE.ERROR, f"{hex(data[0])} is not accessible.")
-            return
+            data.append(color_string("NOT ACCESSIBLE", TERM_COLORS.RED.name))
+        else:
+            self.dereference_last_address(data, target, process, regions)
 
-        self.dereference_last_address(data, target, process, regions)
+        return data
 
-        output = color_string(hex_or_str(data[0]), TERM_COLORS.CYAN.name, rwrap=GLYPHS.VERTICAL_LINE.value)
+    def print_dereference_result(self, result: List, offset: int):
+        """Format and output the results of dereferencing an address."""
+        output = color_string(hex_or_str(result[0]), TERM_COLORS.CYAN.name, rwrap=GLYPHS.VERTICAL_LINE.value)
         if offset >= 0:
             output += f"+0x{offset:04x}: "
         else:
             output += f"-0x{-offset:04x}: "
-        output += " -> ".join(map(hex_or_str, data[1:]))
+        output += " -> ".join(map(hex_or_str, result[1:]))
         output_line(output)
 
     @check_process
@@ -177,4 +178,5 @@ class DereferenceCommand(BaseCommand):
         end_address = start_address + address_size * lines
         for address in range(start_address, end_address, address_size):
             offset = address - base
-            self.dereference(address, offset, exe_ctx.target, exe_ctx.process, self.context_handler.regions)
+            result = self.dereference(address, exe_ctx.target, exe_ctx.process, self.context_handler.regions)
+            self.print_dereference_result(result, offset)

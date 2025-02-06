@@ -2,9 +2,9 @@
 
 import argparse
 import shlex
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
-from lldb import SBCommandReturnObject, SBDebugger, SBError, SBExecutionContext, SBMemoryRegionInfo, SBProcess
+from lldb import SBCommandReturnObject, SBDebugger, SBError, SBExecutionContext, SBMemoryRegionInfo, SBProcess, SBTarget
 
 from commands.base_command import BaseCommand
 from common.constants import MSG_TYPE
@@ -53,7 +53,7 @@ class ScanCommand(BaseCommand):
         """Return a longer help message"""
         return ScanCommand.get_command_parser().format_help()
 
-    def parse_address_ranges(self, process: SBProcess, region_name: str):
+    def parse_address_ranges(self, process: SBProcess, region_name: str) -> List[Tuple[int, int]]:
         """
         Parse a custom address range (e.g., 0x7fffffffe208-0x7fffffffe240)
         or extract address ranges from memory regions with a given name (e.g., libc).
@@ -70,7 +70,7 @@ class ScanCommand(BaseCommand):
                 try:
                     region_start = int(region_start_end[0], 16)
                     region_end = int(region_start_end[1], 16)
-                    address_ranges.append([region_start, region_end])
+                    address_ranges.append((region_start, region_end))
                 except ValueError:
                     print_message(MSG_TYPE.ERROR, "Invalid address range.")
         else:
@@ -78,7 +78,7 @@ class ScanCommand(BaseCommand):
 
         return address_ranges
 
-    def find_address_ranges(self, process: SBProcess, region_name: str):
+    def find_address_ranges(self, process: SBProcess, region_name: str) -> List[Tuple[int, int]]:
         """
         Extract address ranges from memory regions with @region_name.
 
@@ -101,9 +101,43 @@ class ScanCommand(BaseCommand):
             ):
                 region_start = memory_region.GetRegionBase()
                 region_end = memory_region.GetRegionEnd()
-                address_ranges.append([region_start, region_end])
+                address_ranges.append((region_start, region_end))
 
         return address_ranges
+
+    def scan(
+        self,
+        search_address_ranges: List[Tuple[int, int]],
+        target_address_ranges: List[Tuple[int, int]],
+        address_size: int,
+        process: SBProcess,
+        target: SBTarget,
+    ) -> List[Tuple[int, int]]:
+        """
+        Scan through a given search space in memory for addresses that point towards a target memory space.
+
+        :param search_address_ranges: A list of start and end addresses of memory regions to search.
+        :param target_address_ranges: A list of start and end addresses defining the range of addresses to search for.
+        :param address_size: The expected address size for the architecture.
+        :param process: The running process of the target.
+        :param target: The target executable.
+        :return: A list of addresses (with their offsets) in the search space that point towards the target address
+        space.
+        """
+        results = []
+        error = SBError()
+        for search_start, search_end in search_address_ranges:
+            for search_address in range(search_start, search_end, address_size):
+                target_address = process.ReadUnsignedFromMemory(search_address, address_size, error)
+                if error.Success():
+                    for target_start, target_end in target_address_ranges:
+                        if target_address >= target_start and target_address < target_end:
+                            offset = search_address - search_start
+                            search_address_value = target.EvaluateExpression(f"{search_address}")
+                            results.append((search_address_value, offset))
+                else:
+                    print_message(MSG_TYPE.ERROR, f"Memory at {search_address} couldn't be read.")
+        return results
 
     @check_process
     def __call__(
@@ -135,15 +169,6 @@ class ScanCommand(BaseCommand):
 
         address_size = exe_ctx.target.GetAddressByteSize()
 
-        error = SBError()
-        for search_start, search_end in search_address_ranges:
-            for search_address in range(search_start, search_end, address_size):
-                target_address = exe_ctx.process.ReadUnsignedFromMemory(search_address, address_size, error)
-                if error.Success():
-                    for target_start, target_end in target_address_ranges:
-                        if target_address >= target_start and target_address < target_end:
-                            offset = search_address - search_start
-                            search_address_value = exe_ctx.target.EvaluateExpression(f"{search_address}")
-                            self.context_handler.print_stack_addr(search_address_value, offset)
-                else:
-                    print_message(MSG_TYPE.ERROR, f"Memory at {search_address} couldn't be read.")
+        results = self.scan(search_address_ranges, target_address_ranges, address_size, exe_ctx.process, exe_ctx.target)
+        for address, offset in results:
+            self.context_handler.print_stack_addr(address, offset)
