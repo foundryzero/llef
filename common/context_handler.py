@@ -428,7 +428,8 @@ class ContextHandler:
             self.update_registers()
 
         # Hack to print cursor at the top of the screen
-        clear_page()
+        if self.debugger.GetUseColor():
+            clear_page()
 
         if self.settings.show_legend:
             self.print_legend()

@@ -99,3 +99,6 @@ class ARCH_BITS(IntEnum):
 
     BITS_32 = 1
     BITS_64 = 2
+
+
+DEFAULT_TERMINAL_COLUMNS = 80

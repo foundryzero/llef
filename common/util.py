@@ -17,8 +17,12 @@ from lldb import (
     SBValue,
 )
 
-from common.constants import ALIGN, GLYPHS, MSG_TYPE, TERM_COLORS
+from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, GLYPHS, MSG_TYPE, TERM_COLORS
 from common.state import LLEFState
+
+
+def terminal_columns() -> int:
+    return os.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
 
 
 def change_use_color(new_value: bool) -> None:
@@ -60,7 +64,7 @@ def print_line_with_string(
     align: ALIGN = ALIGN.RIGHT,
 ) -> None:
     """Print a line with the provided @string padded with @char"""
-    width = os.get_terminal_size().columns
+    width = terminal_columns()
     if align == ALIGN.RIGHT:
         l_pad = (width - len(string) - 6) * char.value
         r_pad = 4 * char.value
@@ -81,7 +85,7 @@ def print_line_with_string(
 
 def print_line(char: GLYPHS = GLYPHS.HORIZONTAL_LINE, color: TERM_COLORS = TERM_COLORS.GREY) -> None:
     """Print a line of @char"""
-    output_line(f"{color.value}{os.get_terminal_size().columns * char.value}{TERM_COLORS.ENDC.value}")
+    output_line(f"{color.value}{terminal_columns() * char.value}{TERM_COLORS.ENDC.value}")
 
 
 def print_message(msg_type: MSG_TYPE, message: str) -> None:
