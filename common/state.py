@@ -27,3 +27,5 @@ class LLEFState(metaclass=Singleton):
 
     # Linux, Mac (Darwin) or Windows
     platform = ""
+
+    disassembly_syntax = None

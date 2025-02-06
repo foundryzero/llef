@@ -4,6 +4,7 @@ from typing import List, Optional, Type
 
 from lldb import (
     SBAddress,
+    SBCommandReturnObject,
     SBDebugger,
     SBError,
     SBExecutionContext,
@@ -22,16 +23,20 @@ from common.constants import GLYPHS, TERM_COLORS
 from common.settings import LLEFSettings
 from common.state import LLEFState
 from common.util import (
+    address_to_filename,
     attempt_to_read_string_from_memory,
     change_use_color,
     clear_page,
+    extract_instructions,
     get_frame_arguments,
+    get_frame_range,
     get_registers,
     is_code,
     is_heap,
     is_stack,
     output_line,
     print_instruction,
+    print_instructions,
     print_line,
     print_line_with_string,
 )
@@ -320,47 +325,35 @@ class ContextHandler:
             string_color=TERM_COLORS[self.color_settings.section_header_color],
         )
 
-        if self.frame.disassembly:
-            instructions = self.frame.disassembly.split("\n")
+        pc = self.frame.GetPC()
 
-            current_pc = hex(self.frame.GetPC())
-            for i, item in enumerate(instructions):
-                if current_pc in item.split(":")[0]:
-                    output_line(instructions[0])
-                    if i > 3:
-                        print_instruction(instructions[i - 3], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(instructions[i - 2], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
-                        # This slice notation (and the 4 below) are a buggy interaction of black and pycodestyle
-                        # See: https://github.com/psf/black/issues/157
-                        # fmt: off
-                        for instruction in instructions[i + 1:i + 6]:  # noqa
-                            # fmt: on
-                            print_instruction(instruction)
-                    if i == 3:
-                        print_instruction(instructions[i - 2], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
-                        # fmt: off
-                        for instruction in instructions[i + 1:10]:  # noqa
-                            # fmt: on
-                            print_instruction(instruction)
-                    if i == 2:
-                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
-                        # fmt: off
-                        for instruction in instructions[i + 1:10]:  # noqa
-                            # fmt: on
-                            print_instruction(instruction)
-                    if i == 1:
-                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
-                        # fmt: off
-                        for instruction in instructions[i + 1:10]:  # noqa
-                            # fmt: on
-                            print_instruction(instruction)
-        else:
-            output_line("No disassembly to print")
+        filename = address_to_filename(self.target, pc)
+        function_name = self.frame.GetFunctionName()
+        output_line(f"{filename}'{function_name}:")
+
+        frame_start_address, frame_end_address = get_frame_range(self.frame, self.target)
+
+        pre_instructions = extract_instructions(self.target, frame_start_address, pc - 1, self.state.disassembly_syntax)
+        print_instructions(
+            pre_instructions[-3:],
+            frame_start_address,
+            self.target,
+            TERM_COLORS[self.color_settings.instruction_color].value,
+        )
+
+        post_instructions = extract_instructions(self.target, pc, frame_end_address, self.state.disassembly_syntax)
+
+        if len(post_instructions) > 0:
+            pc_instruction = post_instructions[0]
+            print_instruction(
+                pc_instruction,
+                frame_start_address,
+                self.target,
+                TERM_COLORS[self.color_settings.highlighted_instruction_color].value,
+            )
+
+            limit = 9 - min(len(pre_instructions), 3)
+            print_instructions(post_instructions[1:limit], frame_start_address, self.target)
 
     def display_threads(self) -> None:
         """Print LLDB formatted thread information"""
@@ -413,6 +406,18 @@ class ContextHandler:
 
             output_line(line)
 
+    def load_disassembly_syntax(self, debugger: SBDebugger) -> None:
+        """Load the disassembly flavour from LLDB into LLEF's state."""
+        self.state.disassembly_syntax = "default"
+        if LLEFState >= [16]:
+            self.state.disassembly_syntax = debugger.GetSetting("target.x86-disassembly-flavor").GetStringValue(100)
+        else:
+            command_interpreter = debugger.GetCommandInterpreter()
+            result = SBCommandReturnObject()
+            command_interpreter.HandleCommand("settings show target.x86-disassembly-flavor", result)
+            if result.Succeeded():
+                self.state.disassembly_syntax = result.GetOutput().split("=")[1][1:].replace("\n", "")
+
     def find_stack_regions(self) -> List[SBMemoryRegionInfo]:
         stack_regions = []
         for frame in self.process.GetSelectedThread().frames:
@@ -425,10 +430,10 @@ class ContextHandler:
 
     def refresh(self, exe_ctx: SBExecutionContext) -> None:
         """Refresh stored values"""
-        self.frame = exe_ctx.GetFrame()
         self.process = exe_ctx.GetProcess()
         self.target = exe_ctx.GetTarget()
         self.thread = exe_ctx.GetThread()
+        self.frame = self.thread.GetFrameAtIndex(0)
         if self.settings.force_arch is not None:
             self.arch = get_arch_from_str(self.settings.force_arch)
         else:
@@ -438,6 +443,9 @@ class ContextHandler:
             self.regions = self.process.GetMemoryRegions()
         else:
             self.regions = None
+
+        if self.state.disassembly_syntax is None:
+            self.load_disassembly_syntax(self.debugger)
 
         if LLEFState.platform == "Darwin":
             self.stack_regions = self.find_stack_regions()

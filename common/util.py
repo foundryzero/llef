@@ -3,13 +3,14 @@
 import os
 import re
 from argparse import ArgumentTypeError
-from typing import Any, List
+from typing import Any, List, Tuple
 
 from lldb import (
     SBAddress,
     SBError,
     SBExecutionContext,
     SBFrame,
+    SBInstruction,
     SBMemoryRegionInfo,
     SBMemoryRegionInfoList,
     SBProcess,
@@ -102,11 +103,86 @@ def print_message(msg_type: MSG_TYPE, message: str) -> None:
         output_line(f"{error_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
 
 
-def print_instruction(line: str, color: TERM_COLORS = TERM_COLORS.ENDC) -> None:
+def address_to_filename(target: SBTarget, address: int) -> str:
+    """
+    Maps a memory address to its corrosponding executable/library and returns the filename.
+
+    :param target: The target context.
+    :param address: The memory address to resolve.
+    :return: The filename.
+    """
+    sb_address = SBAddress(address, target)
+    module = sb_address.GetModule()
+    file_spec = module.GetFileSpec()
+    filename = file_spec.GetFilename()
+
+    return filename
+
+
+def extract_instructions(
+    target: SBTarget, start_address: int, end_address: int, disassembly_flavour: str
+) -> List[SBInstruction]:
+    """
+    Returns a list of instructions between a range of memory address defined by @start_address and @end_address.
+
+    :param target: The target context.
+    :param start_address: The address to start reading instructions from memory.
+    :param end_address: The address to stop reading instruction from memory.
+    :return: A list of instructions.
+    """
+    instructions = []
+    current = start_address
+    while current <= end_address:
+        address = SBAddress(current, target)
+        instruction = target.ReadInstructions(address, 1, disassembly_flavour).GetInstructionAtIndex(0)
+        instructions.append(instruction)
+        instruction_size = instruction.GetByteSize()
+        if instruction_size > 0:
+            current += instruction_size
+        else:
+            break
+
+    return instructions
+
+
+def print_instruction(
+    instruction: SBInstruction, base: int, target: SBTarget, color: TERM_COLORS = TERM_COLORS.ENDC.value
+) -> None:
     """Format and print a line of disassembly returned from LLDB (SBFrame.disassembly)"""
-    loc_0x = line.find("0x")
-    start_idx = loc_0x if loc_0x >= 0 else 0
-    output_line(f"{color.value}{line[start_idx:]}{TERM_COLORS.ENDC.value}")
+
+    address = instruction.GetAddress().GetLoadAddress(target)
+    offset = address - base
+
+    if instruction is None:
+        output_line(f"{color}{hex(address)} <+{offset:02}>: INVALID INSTRUCTION")
+        return
+
+    mnemonic = instruction.GetMnemonic(target) or ""
+    operands = instruction.GetOperands(target) or ""
+    comment = instruction.GetComment(target) or ""
+    if comment != "":
+        comment = f"; {comment}"
+
+    output_line(f"{color}{hex(address)} <+{offset:02}>: {mnemonic:<10}{operands:<30}{comment}{TERM_COLORS.ENDC.value}")
+
+
+def print_instructions(
+    instructions: List[SBInstruction], base: int, target: SBTarget, color: TERM_COLORS = TERM_COLORS.ENDC.value
+) -> None:
+    for instruction in instructions:
+        print_instruction(instruction, base, target, color)
+
+
+def get_frame_range(frame: SBFrame, target: SBTarget) -> Tuple[str, str]:
+    function = frame.GetFunction()
+    if function:
+        start_address = function.GetStartAddress().GetLoadAddress(target)
+        end_address = function.GetEndAddress().GetLoadAddress(target)
+    else:
+        start_address = frame.GetSymbol().GetStartAddress().GetLoadAddress(target)
+        end_address = frame.GetSymbol().GetEndAddress().GetLoadAddress(target) - 1
+
+    return start_address, end_address
 
 
 def get_registers(frame: SBFrame, frame_type: str) -> List[SBValue]:
