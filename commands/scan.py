@@ -1,0 +1,88 @@
+"""Scan command class."""
+
+import argparse
+import shlex
+from typing import Any, Dict
+
+from lldb import SBCommandReturnObject, SBDebugger, SBError, SBExecutionContext
+
+from commands.base_command import BaseCommand
+from common.constants import MSG_TYPE
+from common.context_handler import ContextHandler
+from common.scan_util import parse_address_ranges
+from common.util import check_process, print_message
+
+
+class ScanCommand(BaseCommand):
+    """Implements the scan command"""
+
+    program: str = "scan"
+    container = None
+    context_handler = None
+
+    def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
+        super().__init__()
+        self.parser = self.get_command_parser()
+        self.context_handler = ContextHandler(debugger)
+
+    @classmethod
+    def get_command_parser(cls) -> argparse.ArgumentParser:
+        """Get the command parser."""
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "search_region",
+            type=str,
+            help="Memory region to search through.",
+        )
+        parser.add_argument(
+            "target_region",
+            type=str,
+            help="Memory address range to search for.",
+        )
+        return parser
+
+    @staticmethod
+    def get_short_help() -> str:
+        """Return a short help message"""
+        return "Usage: scan [search_region] [target_region]"
+
+    @staticmethod
+    def get_long_help() -> str:
+        """Return a longer help message"""
+        return ScanCommand.get_command_parser().format_help()
+
+    @check_process
+    def __call__(
+        self,
+        debugger: SBDebugger,
+        command: str,
+        exe_ctx: SBExecutionContext,
+        result: SBCommandReturnObject,
+    ) -> None:
+        """Handles the invocation of the scan command"""
+
+        args = self.parser.parse_args(shlex.split(command))
+        search_region = args.search_region
+        target_region = args.target_region
+
+        self.context_handler.refresh(exe_ctx)
+
+        search_address_ranges = parse_address_ranges(exe_ctx.process, search_region)
+        target_address_ranges = parse_address_ranges(exe_ctx.process, target_region)
+
+        print_message(MSG_TYPE.INFO, f"Searching for addresses in '{search_region}' that point to '{target_region}'")
+
+        address_size = exe_ctx.target.GetAddressByteSize()
+
+        error = SBError()
+        for search_start, search_end in search_address_ranges:
+            for search_address in range(search_start, search_end, address_size):
+                target_address = exe_ctx.process.ReadUnsignedFromMemory(search_address, address_size, error)
+                if error.Success():
+                    for target_start, target_end in target_address_ranges:
+                        if target_address >= target_start and target_address < target_end:
+                            offset = search_address - search_start
+                            search_address_value = exe_ctx.target.EvaluateExpression(f"{search_address}")
+                            self.context_handler.print_stack_addr(search_address_value, offset)
+                else:
+                    print_message(MSG_TYPE.ERROR, f"Memory at {search_address} couldn't be read.")
