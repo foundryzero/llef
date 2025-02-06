@@ -77,6 +77,10 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     def output_order(self):
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "output_order", fallback=self.DEFAUL_OUTPUT_ORDER)
 
+    @property
+    def truncate_output(self):
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "truncate_output", fallback=True)
+
     def validate_output_order(self, value: str):
         default_sections = self.DEFAUL_OUTPUT_ORDER.split(",")
         sections = value.split(",")
@@ -131,7 +135,10 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
 
         if setting == "color_output":
             self.state.change_use_color(self.color_output)
+        elif setting == "truncate_output":
+            self.state.change_truncate_output(self.truncate_output)
 
     def load(self, reset=False):
         super().load(reset)
         self.state.change_use_color(self.color_output)
+        self.state.change_truncate_output(self.truncate_output)

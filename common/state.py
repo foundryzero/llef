@@ -22,6 +22,9 @@ class LLEFState(metaclass=Singleton):
     # Stores whether color should be used
     use_color = False
 
+    # Stores whether output lines should be truncated
+    truncate_output = True
+
     # Stores version of LLDB if on Linux. Stores clang verion if on Mac
     version = []
 
@@ -35,3 +38,7 @@ class LLEFState(metaclass=Singleton):
         Change the global use_color bool. use_color should not be written to directly
         """
         self.use_color = new_value
+
+    def change_truncate_output(self, new_value: bool) -> None:
+        """Change the global truncate_output bool."""
+        self.truncate_output = new_value

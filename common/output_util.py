@@ -2,6 +2,7 @@
 
 import os
 import re
+from textwrap import TextWrapper
 from typing import Any
 
 from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, DEFAULT_TERMINAL_LINES, GLYPHS, MSG_TYPE, TERM_COLORS
@@ -40,16 +41,45 @@ def terminal_columns() -> int:
     return columns
 
 
-def output_line(line: Any) -> None:
+def remove_color(string: str) -> str:
+    """Removes all ANSI color character sequences from string."""
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", string)
+
+
+def truncate_line(line: str) -> str:
+    """Truncates a line to fix within terminal width."""
+    truncation_step = 10
+    color_character_count = len(line) - len(remove_color(line))
+
+    w = TextWrapper(
+        width=terminal_columns() + color_character_count,
+        max_lines=1,
+        placeholder=f"{TERM_COLORS.ENDC.value}...",
+    )
+
+    while len(remove_color(line)) > terminal_columns():
+        w.width -= truncation_step
+        line = w.fill(line)
+
+    return line
+
+
+def output_line(line: Any, never_truncate: bool = False) -> None:
     """
     Format a line of output for printing. Print should not be used elsewhere.
     Exception - clear_page would not function without terminal characters
     """
+
     line = str(line)
-    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
     if LLEFState().use_color is False:
-        line = ansi_escape.sub("", line)
-    print(line)
+        line = remove_color(line)
+
+    if LLEFState().truncate_output and not never_truncate:
+        for s_line in line.split("\n"):
+            print(truncate_line(s_line))
+    else:
+        print(line)
 
 
 def clear_page() -> None:
@@ -101,12 +131,13 @@ def print_line_with_string(
     line += color_string(string, string_color, " ", " ")
     line += color_string(r_pad, line_color)
 
-    output_line(line)
+    output_line(line, never_truncate=True)
 
 
 def print_line(char: GLYPHS = GLYPHS.HORIZONTAL_LINE, color: str = TERM_COLORS.GREY.name) -> None:
     """Print a line of @char"""
-    output_line(color_string(terminal_columns() * char.value, color))
+    line = color_string(terminal_columns() * char.value, color)
+    output_line(line, never_truncate=True)
 
 
 def print_message(msg_type: MSG_TYPE, message: str) -> None:
@@ -116,10 +147,12 @@ def print_message(msg_type: MSG_TYPE, message: str) -> None:
     error_color = TERM_COLORS.RED.name
 
     if msg_type == MSG_TYPE.INFO:
-        output_line(color_string("[i] ", info_color, rwrap=message))
+        message = color_string("[i] ", info_color, rwrap=message)
     elif msg_type == MSG_TYPE.SUCCESS:
-        output_line(color_string("[+] ", success_color, rwrap=message))
+        message = color_string("[+] ", success_color, rwrap=message)
     elif msg_type == MSG_TYPE.ERROR:
-        output_line(color_string("[-] ", error_color, rwrap=message))
+        message = color_string("[-] ", error_color, rwrap=message)
     else:
         raise KeyError(f"{msg_type} is an invalid MSG_TYPE.")
+
+    output_line(message, never_truncate=True)
