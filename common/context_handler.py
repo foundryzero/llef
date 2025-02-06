@@ -198,7 +198,7 @@ class ContextHandler:
             # Register value has changed so highlight
             highlight = TERM_COLORS[self.color_settings.modified_register_color]
 
-        if is_code(reg_value, self.process, self.regions):
+        if is_code(reg_value, self.process, self.target, self.regions):
             color = TERM_COLORS[self.color_settings.code_color]
         elif is_stack(reg_value, self.process, self.regions):
             color = TERM_COLORS[self.color_settings.stack_color]

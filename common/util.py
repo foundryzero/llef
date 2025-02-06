@@ -11,6 +11,7 @@ from lldb import (
     SBMemoryRegionInfo,
     SBMemoryRegionInfoList,
     SBProcess,
+    SBSection,
     SBTarget,
     SBValue,
 )
@@ -153,14 +154,65 @@ def attempt_to_read_string_from_memory(process: SBProcess, addr: SBValue, buffer
     return ret_string
 
 
-def is_code(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
+def is_ascii_string(address: SBValue, process: SBProcess) -> bool:
+    """
+    Determines if a given memory @address contains a readable string.
+
+    :param address: The memory address to read.
+    :param process: A running process of the target.
+    :return: A boolean of the check.
+    """
+    return attempt_to_read_string_from_memory(process, address) != ""
+
+
+def is_in_section(address: SBValue, target: SBTarget, section: SBSection):
+    """
+    Determines whether a given memory @address exists within a @section of the executable file @target.
+
+    :param address: The memory address to check.
+    :param target: The target object file.
+    :param section: The section of the executable file.
+    :return: A boolean of the check.
+    """
+
+    if section:
+        section_start = section.GetLoadAddress(target)
+        section_end = section_start + section.GetByteSize()
+        if section_start <= address < section_end:
+            return True
+
+    return False
+
+
+def is_text_region(address: SBValue, target: SBTarget, region: SBMemoryRegionInfo) -> bool:
+    """
+    Determines if a given memory @address if within a '.text' section of the target executable.
+
+    :param address: The memory address to check.
+    :param target: The target object file.
+    :param region: The memory region that the address exists in.
+    :return: A boolean of the check.
+    """
+    file = target.GetExecutable()
+    text_section = target.GetModuleAtIndex(0).FindSection(".text")
+
+    in_text = False
+    if is_in_section(address, target, text_section):
+        in_text = True
+    elif file.GetFilename() in region.GetName() and file.GetDirectory() in region.GetName():
+        in_text = True
+
+    return in_text
+
+
+def is_code(address: SBValue, process: SBProcess, target: SBTarget, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to code"""
-    if regions is None:
-        return False
     region = SBMemoryRegionInfo()
     code_bool = False
-    if regions.GetMemoryRegionContainingAddress(address, region):
-        code_bool = region.IsExecutable()
+    if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
+        code_bool = region.IsExecutable() and is_text_region(
+            address, target, region
+        )  # and not is_ascii_string(address, process)
     return code_bool
 
 
