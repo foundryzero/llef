@@ -6,8 +6,9 @@ from lldb import SBDebugger
 
 from arch import supported_arch
 from common.base_settings import BaseLLEFSettings
+from common.constants import MSG_TYPE
 from common.singleton import Singleton
-from common.util import change_use_color, output_line
+from common.util import change_use_color, output_line, print_message
 
 
 class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
@@ -17,6 +18,7 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
 
     LLEF_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".llef")
     GLOBAL_SECTION = "LLEF"
+    DEFAUL_OUTPUT_ORDER = "registers,stack,code,threads,trace"
     debugger: SBDebugger = None
 
     @property
@@ -71,6 +73,22 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     def show_all_registers(self):
         return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_all_registers", fallback=False)
 
+    @property
+    def output_order(self):
+        return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "output_order", fallback=self.DEFAUL_OUTPUT_ORDER)
+
+    def validate_output_order(self, value: str):
+        default_sections = self.DEFAUL_OUTPUT_ORDER.split(",")
+        sections = value.split(",")
+        if len(sections) != len(default_sections):
+            print_message(MSG_TYPE.ERROR, f"Requires {len(default_sections)} elements.")
+            raise ValueError
+
+        for section in default_sections:
+            if section not in sections:
+                print_message(MSG_TYPE.ERROR, f"Missing '{section}' from output order.")
+                raise ValueError
+
     def validate_settings(self, setting=None) -> bool:
         """
         Validate settings by attempting to retrieve all properties thus executing any ConfigParser coverters
@@ -95,6 +113,9 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
                 ):
                     print("Colour is not supported by your terminal")
                     raise ValueError
+
+                elif setting_name == "output_order":
+                    self.validate_output_order(value)
             except ValueError:
                 valid = False
                 raw_value = self._RAW_CONFIG.get(self.GLOBAL_SECTION, setting_name)

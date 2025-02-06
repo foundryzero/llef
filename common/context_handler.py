@@ -433,19 +433,16 @@ class ContextHandler:
         if self.settings.show_legend:
             self.print_legend()
 
-        if self.settings.show_registers:
-            self.display_registers()
-
-        if self.settings.show_stack:
-            self.display_stack()
-
-        if self.settings.show_code:
-            self.display_code()
-
-        if self.settings.show_threads:
-            self.display_threads()
-
-        if self.settings.show_trace:
-            self.display_trace()
+        for section in self.settings.output_order.split(","):
+            if section == "registers" and self.settings.show_registers:
+                self.display_registers()
+            elif section == "stack" and self.settings.show_stack:
+                self.display_stack()
+            elif section == "code" and self.settings.show_code:
+                self.display_code()
+            elif section == "threads" and self.settings.show_threads:
+                self.display_threads()
+            elif section == "trace" and self.settings.show_trace:
+                self.display_trace()
 
         print_line(color=TERM_COLORS[self.color_settings.line_color])
