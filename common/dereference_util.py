@@ -32,7 +32,7 @@ def dereference_last_address(data: list, target: SBTarget, process: SBProcess, r
     """
     last_address = data[-2]
 
-    if is_code(last_address, process, regions):
+    if is_code(last_address, process, target, regions):
         instruction = read_instruction(target, last_address)
         if instruction.IsValid():
             data[-1] = (
