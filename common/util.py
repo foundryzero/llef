@@ -182,3 +182,17 @@ def is_heap(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoLis
 def extract_arch_from_triple(triple: str) -> str:
     """Extracts the architecture from triple string."""
     return triple.split("-")[0]
+
+
+def check_version(required_version_string):
+    def inner(func):
+        def wrapper(*args, **kwargs):
+            required_version = [int(x) for x in required_version_string.split(".")]
+            if LLEFState.version < required_version:
+                print(f"error: requires LLDB version {required_version_string} to execute")
+                return
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return inner

@@ -21,3 +21,6 @@ class LLEFState(metaclass=Singleton):
 
     # Stores whether color should be used
     use_color = False
+
+    # Stores version of LLDB.
+    version = []

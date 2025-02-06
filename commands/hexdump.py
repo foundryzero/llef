@@ -8,6 +8,8 @@ from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_command import BaseCommand
 from common.constants import SIZES
+from common.context_handler import ContextHandler
+from common.util import check_version
 
 
 class HexdumpCommand(BaseCommand):
@@ -19,12 +21,7 @@ class HexdumpCommand(BaseCommand):
 
     # Define alias set, where each entry is an alias with any arguments the command should take.
     # For example, 'dq' maps to 'hexdump qword'.
-    alias_set = {
-        "dq": "qword",
-        "dd": "dword",
-        "dw": "word",
-        "db": "byte"
-    }
+    alias_set = {"dq": "qword", "dd": "dword", "dw": "word", "db": "byte"}
 
     def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
         super().__init__()
@@ -36,16 +33,26 @@ class HexdumpCommand(BaseCommand):
         """Get the command parser."""
         parser = argparse.ArgumentParser()
         parser.add_argument(
-            "type", choices=["qword", "dword", "word", "byte"], default="byte", help="The format for presenting data"
+            "type",
+            choices=["qword", "dword", "word", "byte"],
+            default="byte",
+            help="The format for presenting data",
         )
         parser.add_argument(
-            "--reverse", action="store_true", help="The direction of output lines. Low to high by default"
+            "--reverse",
+            action="store_true",
+            help="The direction of output lines. Low to high by default",
         )
         parser.add_argument(
-            "--size", type=positive_int, default=16, help="The number of qword/dword/word/bytes to display"
+            "--size",
+            type=positive_int,
+            default=16,
+            help="The number of qword/dword/word/bytes to display",
         )
         parser.add_argument(
-            "address", type=hex_int, help="A value/address/symbol used as the location to print the hexdump from"
+            "address",
+            type=hex_int,
+            help="A value/address/symbol used as the location to print the hexdump from",
         )
         return parser
 
@@ -59,6 +66,7 @@ class HexdumpCommand(BaseCommand):
         """Return a longer help message"""
         return HexdumpCommand.get_command_parser().format_help()
 
+    @check_version("15.2.0")
     def __call__(
         self,
         debugger: SBDebugger,

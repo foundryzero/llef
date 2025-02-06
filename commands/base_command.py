@@ -1,15 +1,16 @@
 """Base command definition."""
 
 from abc import ABC, abstractmethod
-from typing import Type, Dict
+from typing import Type
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_container import BaseContainer
 
+
 class BaseCommand(ABC):
     """An abstract base class for all commands."""
-    
+
     alias_set = {}
 
     @abstractmethod
