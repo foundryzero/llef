@@ -27,9 +27,11 @@ class ContextCommand(BaseCommand):
         """Get the command parser."""
         parser = argparse.ArgumentParser(description="context command")
         parser.add_argument(
-            "sections", nargs="*", choices=["registers", "stack", "code", "threads", "trace", "all"], default="all"
+            "sections",
+            nargs="*",
+            choices=["registers", "stack", "code", "threads", "trace", "all"],
+            default="all",
         )
-
         return parser
 
     @staticmethod

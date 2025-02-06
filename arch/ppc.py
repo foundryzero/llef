@@ -39,6 +39,14 @@ class PPC(BaseArch):
         "carry": 0x20000000,
     }
 
-    _cr_register_bit_masks = {"cr0_lt": 0x80000000, "cr0_gt": 0x40000000, "cr0_eq": 0x20000000, "cr0_so": 0x10000000}
+    _cr_register_bit_masks = {
+        "cr0_lt": 0x80000000,
+        "cr0_gt": 0x40000000,
+        "cr0_eq": 0x20000000,
+        "cr0_so": 0x10000000,
+    }
 
-    flag_registers = [FlagRegister("cr", _cr_register_bit_masks), FlagRegister("xer", _xer_register_bit_masks)]
+    flag_registers = [
+        FlagRegister("cr", _cr_register_bit_masks),
+        FlagRegister("xer", _xer_register_bit_masks),
+    ]
