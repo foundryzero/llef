@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext, SBMemoryRegionInfo
 
+from arch import get_arch
 from commands.base_command import BaseCommand
 from common.constants import MSG_TYPE
 from common.context_handler import ContextHandler
@@ -59,11 +60,16 @@ class XinfoCommand(BaseCommand):
         args = self.parser.parse_args(shlex.split(command))
         address = args.address
 
+        if address < 0 or address > 2 ** get_arch(exe_ctx.target).bits:
+            print_message(MSG_TYPE.ERROR, "Invalid address.")
+            return
+
         memory_region = SBMemoryRegionInfo()
         error = exe_ctx.process.GetMemoryRegionInfo(address, memory_region)
 
         if error.Fail():
             print_message(MSG_TYPE.ERROR, "Couldn't obtain region info")
+            return
 
         if not memory_region.IsMapped():
             print_message(MSG_TYPE.ERROR, f"Not Found: {hex(address)}")
