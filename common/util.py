@@ -6,18 +6,18 @@ from argparse import ArgumentTypeError
 from typing import Any, List
 
 from lldb import (
+    SBAddress,
     SBError,
     SBExecutionContext,
     SBFrame,
     SBMemoryRegionInfo,
     SBMemoryRegionInfoList,
     SBProcess,
-    SBSection,
     SBTarget,
     SBValue,
 )
 
-from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, GLYPHS, MSG_TYPE, TERM_COLORS
+from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, GLYPHS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
 from common.state import LLEFState
 
 
@@ -170,7 +170,7 @@ def is_ascii_string(address: SBValue, process: SBProcess) -> bool:
     return attempt_to_read_string_from_memory(process, address) != ""
 
 
-def is_in_section(address: SBValue, target: SBTarget, section: SBSection):
+def is_in_section(address: SBValue, target: SBTarget, target_section_name: str):
     """
     Determines whether a given memory @address exists within a @section of the executable file @target.
 
@@ -180,13 +180,11 @@ def is_in_section(address: SBValue, target: SBTarget, section: SBSection):
     :return: A boolean of the check.
     """
 
-    if section:
-        section_start = section.GetLoadAddress(target)
-        section_end = section_start + section.GetByteSize()
-        if section_start <= address < section_end:
-            return True
+    sb_address = target.ResolveLoadAddress(address)
+    section = sb_address.GetSection()
+    section_name = section.GetName()
 
-    return False
+    return section_name is not None and target_section_name in section_name
 
 
 def is_text_region(address: SBValue, target: SBTarget, region: SBMemoryRegionInfo) -> bool:
@@ -198,14 +196,17 @@ def is_text_region(address: SBValue, target: SBTarget, region: SBMemoryRegionInf
     :param region: The memory region that the address exists in.
     :return: A boolean of the check.
     """
-    file = target.GetExecutable()
-    text_section = target.GetModuleAtIndex(0).FindSection(".text")
 
     in_text = False
-    if is_in_section(address, target, text_section):
-        in_text = True
-    elif file.GetFilename() in region.GetName() and file.GetDirectory() in region.GetName():
-        in_text = True
+    if is_file(target, MAGIC_BYTES.MACH.value):
+        if is_in_section(address, target, "__TEXT") or is_in_section(address, target, "__text"):
+            in_text = True
+    else:
+        file = target.GetExecutable()
+        if is_in_section(address, target, ".text") or (
+            file.GetFilename() in region.GetName() and file.GetDirectory() in region.GetName()
+        ):
+            in_text = True
 
     return in_text
 
@@ -221,26 +222,33 @@ def is_code(address: SBValue, process: SBProcess, target: SBTarget, regions: SBM
     return code_bool
 
 
-def is_stack(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
+def is_stack(address: SBValue, regions: SBMemoryRegionInfoList, stack_regions: List[SBMemoryRegionInfo]) -> bool:
     """Determines whether an @address points to the stack"""
-    if regions is None:
-        return False
-    region = SBMemoryRegionInfo()
+
     stack_bool = False
-    if regions.GetMemoryRegionContainingAddress(address, region):
-        if region.GetName() == "[stack]":
+    region = SBMemoryRegionInfo()
+    if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
+        if LLEFState.platform == "Darwin" and region in stack_regions:
             stack_bool = True
+        elif region.GetName() == "[stack]":
+            stack_bool = True
+
     return stack_bool
 
 
-def is_heap(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
+def is_heap(
+    address: SBValue, target: SBTarget, regions: SBMemoryRegionInfoList, stack_regions: List[SBMemoryRegionInfo]
+) -> bool:
     """Determines whether an @address points to the heap"""
-    if regions is None:
-        return False
-    region = SBMemoryRegionInfo()
     heap_bool = False
-    if regions.GetMemoryRegionContainingAddress(address, region):
-        if region.GetName() == "[heap]":
+    region = SBMemoryRegionInfo()
+    if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
+        if LLEFState.platform == "Darwin":
+            sb_address = SBAddress(address, target)
+            filename = sb_address.GetModule().GetFileSpec().GetFilename()
+            if filename is None and not is_stack(address, regions, stack_regions) and region.IsWritable():
+                heap_bool = True
+        elif region.GetName() == "[heap]":
             heap_bool = True
     return heap_bool
 
@@ -322,12 +330,18 @@ def check_target(func):
     return wrapper
 
 
+def is_file(target: SBTarget, expected_magic_bytes: List[bytes]):
+    """Read signature of @target file and compare to expected magic bytes."""
+    magic_bytes = read_program(target, 0, 4)
+    return magic_bytes in expected_magic_bytes
+
+
 def check_elf(func):
     def wrapper(*args, **kwargs):
         for arg in list(args) + list(kwargs.values()):
             if isinstance(arg, SBExecutionContext):
                 try:
-                    if read_program(arg.target, 0, 4) == b"\x7F\x45\x4C\x46":
+                    if is_file(arg.target, MAGIC_BYTES.ELF.value):
                         return func(*args, **kwargs)
                     else:
                         print_message(MSG_TYPE.ERROR, "Target must be an ELF file.")
@@ -351,7 +365,7 @@ def hex_int(x):
 
 def positive_int(x):
     """A converter for input arguments in different bases to positive ints"""
-    x = hex_int(x, 0)
+    x = hex_int(x)
     if x <= 0:
         raise ArgumentTypeError("Must be positive")
     return x

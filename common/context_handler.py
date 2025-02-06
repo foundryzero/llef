@@ -1,8 +1,19 @@
 import os
 from string import printable
-from typing import Optional, Type
+from typing import List, Optional, Type
 
-from lldb import SBAddress, SBDebugger, SBError, SBExecutionContext, SBFrame, SBProcess, SBTarget, SBThread, SBValue
+from lldb import (
+    SBAddress,
+    SBDebugger,
+    SBError,
+    SBExecutionContext,
+    SBFrame,
+    SBMemoryRegionInfo,
+    SBProcess,
+    SBTarget,
+    SBThread,
+    SBValue,
+)
 
 from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
@@ -51,6 +62,7 @@ class ContextHandler:
         self.settings = LLEFSettings(debugger)
         self.color_settings = LLEFColorSettings()
         self.state = LLEFState()
+        self.stack_regions = List[SBMemoryRegionInfo]
         change_use_color(self.settings.color_output)
 
     def generate_rebased_address_string(self, address: SBAddress) -> str:
@@ -200,9 +212,9 @@ class ContextHandler:
 
         if is_code(reg_value, self.process, self.target, self.regions):
             color = TERM_COLORS[self.color_settings.code_color]
-        elif is_stack(reg_value, self.process, self.regions):
+        elif is_stack(reg_value, self.regions, self.stack_regions):
             color = TERM_COLORS[self.color_settings.stack_color]
-        elif is_heap(reg_value, self.process, self.regions):
+        elif is_heap(reg_value, self.target, self.regions, self.stack_regions):
             color = TERM_COLORS[self.color_settings.heap_color]
         else:
             color = TERM_COLORS.ENDC
@@ -401,6 +413,16 @@ class ContextHandler:
 
             output_line(line)
 
+    def find_stack_regions(self) -> List[SBMemoryRegionInfo]:
+        stack_regions = []
+        for frame in self.process.GetSelectedThread().frames:
+            sp = frame.GetSP()
+            region = SBMemoryRegionInfo()
+            self.process.GetMemoryRegionInfo(sp, region)
+            stack_regions.append(region)
+
+        return stack_regions
+
     def refresh(self, exe_ctx: SBExecutionContext) -> None:
         """Refresh stored values"""
         self.frame = exe_ctx.GetFrame()
@@ -416,6 +438,9 @@ class ContextHandler:
             self.regions = self.process.GetMemoryRegions()
         else:
             self.regions = None
+
+        if LLEFState.platform == "Darwin":
+            self.stack_regions = self.find_stack_regions()
 
     def display_context(self, exe_ctx: SBExecutionContext, update_registers: bool) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""

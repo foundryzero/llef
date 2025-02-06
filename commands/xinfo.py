@@ -5,12 +5,13 @@ import os
 import shlex
 from typing import Any, Dict
 
-from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext, SBMemoryRegionInfo
+from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext, SBMemoryRegionInfo, SBStream
 
 from arch import get_arch
 from commands.base_command import BaseCommand
 from common.constants import MSG_TYPE
 from common.context_handler import ContextHandler
+from common.state import LLEFState
 from common.util import check_process, hex_int, print_message
 
 
@@ -25,6 +26,7 @@ class XinfoCommand(BaseCommand):
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
+        self.state = LLEFState()
 
     @classmethod
     def get_command_parser(cls) -> argparse.ArgumentParser:
@@ -91,12 +93,20 @@ class XinfoCommand(BaseCommand):
         permissions += "x" if memory_region.IsExecutable() else ""
         print_message(MSG_TYPE.INFO, f"Permissions: {permissions}")
 
-        path = memory_region.GetName()
+        if self.state.platform == "Darwin":
+            sb_address = exe_ctx.target.ResolveLoadAddress(address)
+            module = sb_address.GetModule()
+            filespec = module.GetFileSpec()
+            description = SBStream()
+            filespec.GetDescription(description)
+            path = description.GetData()
+        else:
+            path = memory_region.GetName()
         print_message(MSG_TYPE.INFO, f"Pathname: {path}")
 
         print_message(MSG_TYPE.INFO, f"Offset (from page/region): +{hex(address - memory_region.GetRegionBase())}")
 
-        if os.path.exists(path):
+        if path is not None and os.path.exists(path):
             print_message(MSG_TYPE.INFO, f"Inode: {os.stat(path).st_ino}")
         else:
             print_message(MSG_TYPE.ERROR, "No inode found: Path cannot be found locally.")

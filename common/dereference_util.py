@@ -61,10 +61,12 @@ def dereference(address: int, offset: int, target: SBTarget, process: SBProcess,
     data = []
 
     error = SBError()
-
     while error.Success():
         data.append(address)
         address = process.ReadPointerFromMemory(address, error)
+        if len(data) > 1 and data[-1] in data[:-2]:
+            data.append("[LOOPING]")
+            break
 
     if len(data) < 2:
         print_message(MSG_TYPE.ERROR, f"{hex(data[0])} is not accessible.")

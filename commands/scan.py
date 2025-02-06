@@ -10,6 +10,7 @@ from commands.base_command import BaseCommand
 from common.constants import MSG_TYPE
 from common.context_handler import ContextHandler
 from common.scan_util import parse_address_ranges
+from common.state import LLEFState
 from common.util import check_process, print_message
 
 
@@ -24,6 +25,7 @@ class ScanCommand(BaseCommand):
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
+        self.state = LLEFState()
 
     @classmethod
     def get_command_parser(cls) -> argparse.ArgumentParser:
@@ -69,6 +71,13 @@ class ScanCommand(BaseCommand):
 
         search_address_ranges = parse_address_ranges(exe_ctx.process, search_region)
         target_address_ranges = parse_address_ranges(exe_ctx.process, target_region)
+
+        if self.state.platform == "Darwin" and (search_address_ranges == [] or target_address_ranges == []):
+            print_message(
+                MSG_TYPE.ERROR,
+                "Memory region names cannot be resolved on macOS. Use memory address ranges instead.",
+            )
+            return
 
         print_message(MSG_TYPE.INFO, f"Searching for addresses in '{search_region}' that point to '{target_region}'")
 

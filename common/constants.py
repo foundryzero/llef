@@ -101,4 +101,16 @@ class ARCH_BITS(IntEnum):
     BITS_64 = 2
 
 
+class MAGIC_BYTES(Enum):
+    """Magic byte signatures for executable files."""
+
+    ELF = [b"\x7F\x45\x4C\x46"]
+    MACH = [
+        b"\xFE\xED\xFA\xCE",
+        b"\xFE\xED\xFA\xCF",
+        b"\xCE\xFA\xED\xFE",
+        b"\xCF\xFA\xED\xFE",
+    ]
+
+
 DEFAULT_TERMINAL_COLUMNS = 80
