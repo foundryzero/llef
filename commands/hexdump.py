@@ -9,7 +9,7 @@ from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 from commands.base_command import BaseCommand
 from common.constants import SIZES
 from common.context_handler import ContextHandler
-from common.util import check_version, output_line
+from common.util import check_version, hex_int, output_line, positive_int
 
 
 class HexdumpCommand(BaseCommand):
@@ -104,16 +104,3 @@ class HexdumpCommand(BaseCommand):
         else:
             for i in range(start, end, step):
                 self.context_handler.print_memory_address(address + i, i, divisions)
-
-
-def hex_int(x):
-    """A converter for input arguments in different bases to ints"""
-    return int(x, 0)
-
-
-def positive_int(x):
-    """A converter for input arguments in different bases to positive ints"""
-    x = int(x, 0)
-    if x <= 0:
-        raise argparse.ArgumentTypeError("Must be positive")
-    return x

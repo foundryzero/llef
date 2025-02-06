@@ -19,6 +19,7 @@ from commands.base_container import BaseContainer
 from commands.checksec import ChecksecCommand
 from commands.color_settings import ColorSettingsCommand
 from commands.context import ContextCommand
+from commands.dereference import DereferenceCommand
 from commands.hexdump import HexdumpCommand
 from commands.pattern import PatternContainer, PatternCreateCommand, PatternSearchCommand
 from commands.scan import ScanCommand
@@ -39,6 +40,7 @@ def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
         HexdumpCommand,
         ChecksecCommand,
         XinfoCommand,
+        DereferenceCommand,
         ScanCommand,
     ]
 
