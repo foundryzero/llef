@@ -6,7 +6,7 @@ from typing import Any, List
 
 from lldb import SBInstruction, SBTarget
 
-from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, GLYPHS, MSG_TYPE, TERM_COLORS
+from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, DEFAULT_TERMINAL_LINES, GLYPHS, MSG_TYPE, TERM_COLORS
 from common.state import LLEFState
 
 
@@ -22,7 +22,7 @@ def color_string(string: str, color_setting: str, lwrap: str = "", rwrap: str = 
     :return: The resulting string.
     """
     if color_setting is None:
-        result = string
+        result = f"{lwrap}{string}{rwrap}"
     else:
         result = f"{lwrap}{TERM_COLORS[color_setting].value}{string}{TERM_COLORS.ENDC.value}{rwrap}"
 
@@ -34,7 +34,12 @@ def terminal_columns() -> int:
     Returns the column width of the terminal. If this is not availble in the
     terminal environment variables then DEFAULT_TERMINAL_COLUMNS we be returned.
     """
-    return os.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
+    try:
+        columns = os.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
+    except OSError:
+        columns = DEFAULT_TERMINAL_COLUMNS
+
+    return columns
 
 
 def output_line(line: Any) -> None:
@@ -54,7 +59,11 @@ def clear_page() -> None:
     Used to clear the previously printed breakpoint information before
     printing the next information.
     """
-    num_lines = os.get_terminal_size().lines
+    try:
+        num_lines = os.get_terminal_size().lines
+    except OSError:
+        num_lines = DEFAULT_TERMINAL_LINES
+
     for _ in range(num_lines):
         print()
     print("\033[0;0H")  # Ansi escape code: Set cursor to 0,0 position
@@ -114,6 +123,8 @@ def print_message(msg_type: MSG_TYPE, message: str) -> None:
         output_line(color_string("[+] ", success_color, rwrap=message))
     elif msg_type == MSG_TYPE.ERROR:
         output_line(color_string("[-] ", error_color, rwrap=message))
+    else:
+        raise KeyError(f"{msg_type} is an invalid MSG_TYPE.")
 
 
 def print_instruction(
@@ -134,16 +145,18 @@ def print_instruction(
     address = instruction.GetAddress().GetLoadAddress(target)
     offset = address - base
 
-    line = f"{hex(address)} <+{offset:02}>: "
-    if instruction is None:
-        line += "INVALID INSTRUCTION"
+    line = hex(address)
+    if offset >= 0:
+        line += f" <+{offset:02}>: "
     else:
-        mnemonic = instruction.GetMnemonic(target) or ""
-        operands = instruction.GetOperands(target) or ""
-        comment = instruction.GetComment(target) or ""
-        if comment != "":
-            comment = f"; {comment}"
-        line += f"{mnemonic:<10}{operands:<30}{comment}"
+        line += f" <-{abs(offset):02}>: "
+
+    mnemonic = instruction.GetMnemonic(target) or ""
+    operands = instruction.GetOperands(target) or ""
+    comment = instruction.GetComment(target) or ""
+    if comment != "":
+        comment = f"; {comment}"
+    line += f"{mnemonic:<10}{operands:<30}{comment}"
 
     output_line(color_string(line, color_setting))
 

@@ -81,13 +81,15 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
         default_sections = self.DEFAUL_OUTPUT_ORDER.split(",")
         sections = value.split(",")
         if len(sections) != len(default_sections):
-            print_message(MSG_TYPE.ERROR, f"Requires {len(default_sections)} elements: '{','.join(default_sections)}'")
-            raise ValueError
+            raise ValueError(f"Requires {len(default_sections)} elements: '{','.join(default_sections)}'")
 
-        missing_sections = set(default_sections) - set(sections)
+        missing_sections = []
+        for section in default_sections:
+            if section not in sections:
+                missing_sections.append(section)
+
         if len(missing_sections) > 0:
-            print_message(MSG_TYPE.ERROR, f"Missing '{','.join(missing_sections)}' from output order.")
-            raise ValueError
+            raise ValueError(f"Missing '{','.join(missing_sections)}' from output order.")
 
     def validate_settings(self, setting=None) -> bool:
         """
@@ -111,15 +113,13 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
                     and self.debugger is not None
                     and self.debugger.GetUseColor() is False
                 ):
-                    print("Colour is not supported by your terminal")
-                    raise ValueError
+                    raise ValueError("Colour is not supported by your terminal")
 
                 elif setting_name == "output_order":
                     self.validate_output_order(value)
-            except ValueError:
+            except ValueError as e:
                 valid = False
-                raw_value = self._RAW_CONFIG.get(self.GLOBAL_SECTION, setting_name)
-                output_line(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
+                print_message(MSG_TYPE.ERROR, f"Invalid value for {setting_name}. {e}")
         return valid
 
     def __init__(self, debugger: SBDebugger):

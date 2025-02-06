@@ -36,7 +36,7 @@ def address_to_filename(target: SBTarget, address: int) -> str:
     """
     sb_address = SBAddress(address, target)
     module = sb_address.GetModule()
-    file_spec = module.GetFileSpec()
+    file_spec = module.GetSymbolFileSpec()
     filename = file_spec.GetFilename()
 
     return filename
@@ -229,6 +229,17 @@ def extract_arch_from_triple(triple: str) -> str:
     return triple.split("-")[0]
 
 
+def verify_version(version: List[int], target_version: List[int]) -> bool:
+    """Checks if the @version is greater than or equal to the @target_version."""
+    length_difference = len(target_version) - len(version)
+    if length_difference > 0:
+        version += [0] * length_difference
+    elif length_difference < 0:
+        target_version += [0] * abs(length_difference)
+
+    return version >= target_version
+
+
 def lldb_version_to_clang(lldb_version):
     """
     Convert an LLDB version to its corrosponding Clang version.
@@ -237,12 +248,12 @@ def lldb_version_to_clang(lldb_version):
     :return: The Clang version.
     """
 
-    clang_version = [0, 0, 0, 0]
-    if lldb_version >= [17, 0, 6]:
+    clang_version = [0]
+    if verify_version(lldb_version, [17, 0, 6]):
         clang_version = [1600, 0, 26, 3]
-    elif lldb_version >= [16, 0, 0]:
+    elif verify_version(lldb_version, [16, 0, 0]):
         clang_version = [1500, 0, 40, 1]
-    elif lldb_version >= [15, 0, 0]:
+    elif verify_version(lldb_version, [15, 0, 0]):
         clang_version = [1403, 0, 22, 14, 1]
 
     return clang_version
@@ -254,7 +265,7 @@ def check_version(required_version_string):
             required_version = [int(x) for x in required_version_string.split(".")]
             if LLEFState.platform == "Darwin":
                 required_version = lldb_version_to_clang(required_version)
-            if LLEFState.version < required_version:
+            if not verify_version(LLEFState.version, required_version):
                 print(f"error: requires LLDB version {required_version_string} to execute")
                 return
             return func(*args, **kwargs)
@@ -386,3 +397,19 @@ def read_program_int(target: SBTarget, offset: int, n: int):
 
     data = read_program(target, offset, n)
     return int.from_bytes(data, "little")
+
+
+def find_stack_regions(process: SBProcess) -> List[SBMemoryRegionInfo]:
+    """
+    Find all memory regions containing the stack by looping through stack pointers in each frame.
+
+    :return: A list of memory region objects.
+    """
+    stack_regions = []
+    for frame in process.GetSelectedThread().frames:
+        sp = frame.GetSP()
+        region = SBMemoryRegionInfo()
+        process.GetMemoryRegionInfo(sp, region)
+        stack_regions.append(region)
+
+    return stack_regions

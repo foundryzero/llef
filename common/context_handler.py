@@ -35,6 +35,7 @@ from common.util import (
     address_to_filename,
     attempt_to_read_string_from_memory,
     extract_instructions,
+    find_stack_regions,
     get_frame_arguments,
     get_frame_range,
     get_registers,
@@ -414,7 +415,7 @@ class ContextHandler:
             self.load_disassembly_syntax(self.debugger)
 
         if LLEFState.platform == "Darwin":
-            self.stack_regions = self.find_stack_regions()
+            self.stack_regions = find_stack_regions(self.process)
 
     def display_context(self, exe_ctx: SBExecutionContext, update_registers: bool) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""
@@ -446,18 +447,3 @@ class ContextHandler:
                 self.display_trace()
 
         print_line(color=self.color_settings.line_color)
-
-    def find_stack_regions(self) -> List[SBMemoryRegionInfo]:
-        """
-        Find all memory regions containing the stack by looping through stack pointers in each frame.
-
-        :return: A list of memory region objects.
-        """
-        stack_regions = []
-        for frame in self.process.GetSelectedThread().frames:
-            sp = frame.GetSP()
-            region = SBMemoryRegionInfo()
-            self.process.GetMemoryRegionInfo(sp, region)
-            stack_regions.append(region)
-
-        return stack_regions
