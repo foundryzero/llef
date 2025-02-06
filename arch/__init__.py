@@ -11,7 +11,8 @@ from arch.i386 import I386
 from arch.ppc import PPC
 from arch.x86_64 import X86_64
 from common.constants import MSG_TYPE
-from common.util import extract_arch_from_triple, print_message
+from common.output_util import print_message
+from common.util import extract_arch_from_triple
 
 # macOS devices running arm chips identify as arm64.
 # aarch64 and arm64 backends have been merged, so alias arm64 to aarch64.

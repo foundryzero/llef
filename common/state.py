@@ -29,3 +29,9 @@ class LLEFState(metaclass=Singleton):
     platform = ""
 
     disassembly_syntax = None
+
+    def change_use_color(self, new_value: bool) -> None:
+        """
+        Change the global use_color bool. use_color should not be written to directly
+        """
+        self.use_color = new_value

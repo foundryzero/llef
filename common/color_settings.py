@@ -5,8 +5,8 @@ from typing import List
 
 from common.base_settings import BaseLLEFSettings
 from common.constants import TERM_COLORS
+from common.output_util import output_line
 from common.singleton import Singleton
-from common.util import output_line
 
 
 class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):

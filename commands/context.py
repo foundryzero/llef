@@ -8,7 +8,7 @@ from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_command import BaseCommand
 from common.context_handler import ContextHandler
-from common.util import output_line
+from common.output_util import output_line
 
 
 class ContextCommand(BaseCommand):

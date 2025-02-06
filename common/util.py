@@ -1,9 +1,8 @@
 """Utility functions."""
 
 import os
-import re
 from argparse import ArgumentTypeError
-from typing import Any, List, Tuple
+from typing import List, Tuple
 
 from lldb import (
     SBAddress,
@@ -18,89 +17,13 @@ from lldb import (
     SBValue,
 )
 
-from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, GLYPHS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
+from common.constants import DEFAULT_TERMINAL_COLUMNS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
+from common.output_util import print_message
 from common.state import LLEFState
 
 
 def terminal_columns() -> int:
     return os.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
-
-
-def change_use_color(new_value: bool) -> None:
-    """
-    Change the global use_color bool. use_color should not be written to directly
-    """
-    LLEFState.use_color = new_value
-
-
-def output_line(line: Any) -> None:
-    """
-    Format a line of output for printing. Print should not be used elsewhere.
-    Exception - clear_page would not function without terminal characters
-    """
-    line = str(line)
-    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-    if LLEFState.use_color is False:
-        line = ansi_escape.sub("", line)
-    print(line)
-
-
-def clear_page() -> None:
-    """
-    Used to clear the previously printed breakpoint information before
-    printing the next information.
-    """
-    num_lines = os.get_terminal_size().lines
-    for _ in range(num_lines):
-        print()
-    print("\033[0;0H")  # Ansi escape code: Set cursor to 0,0 position
-    print("\033[J")  # Ansi escape code: Clear contents from cursor to end of screen
-
-
-def print_line_with_string(
-    string: str,
-    char: GLYPHS = GLYPHS.HORIZONTAL_LINE,
-    line_color: TERM_COLORS = TERM_COLORS.GREY,
-    string_color: TERM_COLORS = TERM_COLORS.BLUE,
-    align: ALIGN = ALIGN.RIGHT,
-) -> None:
-    """Print a line with the provided @string padded with @char"""
-    width = terminal_columns()
-    if align == ALIGN.RIGHT:
-        l_pad = (width - len(string) - 6) * char.value
-        r_pad = 4 * char.value
-
-    elif align == ALIGN.CENTRE:
-        l_pad = (width - len(string)) * char.value
-        r_pad = 4 * char.value
-
-    elif align == ALIGN.LEFT:
-        l_pad = 4 * char.value
-        r_pad = (width - len(string) - 6) * char.value
-
-    output_line(
-        f"{line_color.value}{l_pad}{TERM_COLORS.ENDC.value} "
-        + f"{string_color.value}{string}{TERM_COLORS.ENDC.value} {line_color.value}{r_pad}{TERM_COLORS.ENDC.value}"
-    )
-
-
-def print_line(char: GLYPHS = GLYPHS.HORIZONTAL_LINE, color: TERM_COLORS = TERM_COLORS.GREY) -> None:
-    """Print a line of @char"""
-    output_line(f"{color.value}{terminal_columns() * char.value}{TERM_COLORS.ENDC.value}")
-
-
-def print_message(msg_type: MSG_TYPE, message: str) -> None:
-    """Format and print a @message"""
-    info_color = TERM_COLORS.BLUE
-    success_color = TERM_COLORS.GREEN
-    error_color = TERM_COLORS.GREEN
-
-    if msg_type == MSG_TYPE.INFO:
-        output_line(f"{info_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
-    elif msg_type == MSG_TYPE.SUCCESS:
-        output_line(f"{success_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
-    elif msg_type == MSG_TYPE.ERROR:
-        output_line(f"{error_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
 
 
 def address_to_filename(target: SBTarget, address: int) -> str:
@@ -143,34 +66,6 @@ def extract_instructions(
             break
 
     return instructions
-
-
-def print_instruction(
-    instruction: SBInstruction, base: int, target: SBTarget, color: TERM_COLORS = TERM_COLORS.ENDC.value
-) -> None:
-    """Format and print a line of disassembly returned from LLDB (SBFrame.disassembly)"""
-
-    address = instruction.GetAddress().GetLoadAddress(target)
-    offset = address - base
-
-    if instruction is None:
-        output_line(f"{color}{hex(address)} <+{offset:02}>: INVALID INSTRUCTION")
-        return
-
-    mnemonic = instruction.GetMnemonic(target) or ""
-    operands = instruction.GetOperands(target) or ""
-    comment = instruction.GetComment(target) or ""
-    if comment != "":
-        comment = f"; {comment}"
-
-    output_line(f"{color}{hex(address)} <+{offset:02}>: {mnemonic:<10}{operands:<30}{comment}{TERM_COLORS.ENDC.value}")
-
-
-def print_instructions(
-    instructions: List[SBInstruction], base: int, target: SBTarget, color: TERM_COLORS = TERM_COLORS.ENDC.value
-) -> None:
-    for instruction in instructions:
-        print_instruction(instruction, base, target, color)
 
 
 def get_frame_range(frame: SBFrame, target: SBTarget) -> Tuple[str, str]:

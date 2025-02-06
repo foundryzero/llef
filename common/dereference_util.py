@@ -2,7 +2,8 @@ from lldb import SBAddress, SBError, SBInstruction, SBMemoryRegionInfoList, SBPr
 
 from common.color_settings import LLEFColorSettings
 from common.constants import GLYPHS, MSG_TYPE, TERM_COLORS
-from common.util import attempt_to_read_string_from_memory, hex_or_str, is_code, output_line, print_message
+from common.output_util import output_line, print_message
+from common.util import attempt_to_read_string_from_memory, hex_or_str, is_code
 
 color_settings = LLEFColorSettings()
 

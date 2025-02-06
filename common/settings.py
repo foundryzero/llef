@@ -7,8 +7,8 @@ from lldb import SBDebugger
 from arch import supported_arch
 from common.base_settings import BaseLLEFSettings
 from common.constants import MSG_TYPE
+from common.output_util import output_line, print_message
 from common.singleton import Singleton
-from common.util import change_use_color, output_line, print_message
 
 
 class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
@@ -130,8 +130,8 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
         super().set(setting, value)
 
         if setting == "color_output":
-            change_use_color(self.color_output)
+            self.state.change_use_color(self.color_output)
 
     def load(self, reset=False):
         super().load(reset)
-        change_use_color(self.color_output)
+        self.state.change_use_color(self.color_output)

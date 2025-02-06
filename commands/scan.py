@@ -9,9 +9,10 @@ from lldb import SBCommandReturnObject, SBDebugger, SBError, SBExecutionContext
 from commands.base_command import BaseCommand
 from common.constants import MSG_TYPE
 from common.context_handler import ContextHandler
+from common.output_util import print_message
 from common.scan_util import parse_address_ranges
 from common.state import LLEFState
-from common.util import check_process, print_message
+from common.util import check_process
 
 
 class ScanCommand(BaseCommand):

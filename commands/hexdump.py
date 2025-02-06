@@ -9,7 +9,7 @@ from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 from commands.base_command import BaseCommand
 from common.constants import SIZES
 from common.context_handler import ContextHandler
-from common.util import check_version, hex_int, output_line, positive_int
+from common.util import check_process, check_version, hex_int, positive_int
 
 
 class HexdumpCommand(BaseCommand):
@@ -66,7 +66,8 @@ class HexdumpCommand(BaseCommand):
         """Return a longer help message"""
         return HexdumpCommand.get_command_parser().format_help()
 
-    @check_version("15.2.0")
+    @check_version("15.0.0")
+    @check_process
     def __call__(
         self,
         debugger: SBDebugger,
@@ -75,10 +76,6 @@ class HexdumpCommand(BaseCommand):
         result: SBCommandReturnObject,
     ) -> None:
         """Handles the invocation of the hexdump command"""
-
-        if not exe_ctx.process.is_alive:
-            output_line("hexdump requires a running process")
-            return
 
         args = self.parser.parse_args(shlex.split(command))
 

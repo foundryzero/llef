@@ -12,8 +12,8 @@ from commands.base_command import BaseCommand
 from commands.base_container import BaseContainer
 from common.constants import MSG_TYPE, TERM_COLORS
 from common.de_bruijn import generate_cyclic_pattern
+from common.output_util import output_line, print_message
 from common.state import LLEFState
-from common.util import output_line, print_message
 
 
 class PatternContainer(BaseContainer):

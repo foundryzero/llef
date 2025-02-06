@@ -4,8 +4,9 @@ import configparser
 import os
 from abc import abstractmethod
 
+from common.output_util import output_line
 from common.singleton import Singleton
-from common.util import output_line
+from common.state import LLEFState
 
 
 class BaseLLEFSettings(metaclass=Singleton):
@@ -23,6 +24,7 @@ class BaseLLEFSettings(metaclass=Singleton):
         return [name for name, value in vars(cls).items() if isinstance(value, property)]
 
     def __init__(self):
+        self.state = LLEFState()
         self.load()
 
     @abstractmethod

@@ -18,7 +18,8 @@ from common.constants import (
     TERM_COLORS,
 )
 from common.context_handler import ContextHandler
-from common.util import check_elf, check_target, output_line, print_message
+from common.output_util import output_line, print_message
+from common.util import check_elf, check_target
 
 
 class ChecksecCommand(BaseCommand):
