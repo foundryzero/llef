@@ -4,12 +4,25 @@ import argparse
 import shlex
 from typing import Any, Dict
 
-from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
+from lldb import (
+    SBAddress,
+    SBCommandReturnObject,
+    SBDebugger,
+    SBError,
+    SBExecutionContext,
+    SBInstruction,
+    SBMemoryRegionInfoList,
+    SBProcess,
+    SBTarget,
+)
 
 from commands.base_command import BaseCommand
+from common.color_settings import LLEFColorSettings
+from common.constants import GLYPHS, MSG_TYPE, TERM_COLORS
 from common.context_handler import ContextHandler
-from common.dereference_util import dereference
-from common.util import check_process, hex_int, positive_int
+from common.output_util import color_string, output_line, print_message
+from common.state import LLEFState
+from common.util import attempt_to_read_string_from_memory, check_process, hex_int, hex_or_str, is_code, positive_int
 
 
 class DereferenceCommand(BaseCommand):
@@ -23,6 +36,8 @@ class DereferenceCommand(BaseCommand):
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
+        self.color_settings = LLEFColorSettings()
+        self.state = LLEFState()
 
     @classmethod
     def get_command_parser(cls) -> argparse.ArgumentParser:
@@ -59,6 +74,83 @@ class DereferenceCommand(BaseCommand):
         """Return a longer help message"""
         return DereferenceCommand.get_command_parser().format_help()
 
+    def read_instruction(self, target: SBTarget, address: int) -> SBInstruction:
+        """
+        We disassemble an instruction at the given memory @address.
+
+        :param target: The target object file.
+        :param address: The memory address of the instruction.
+        :return: An object of the disassembled instruction.
+        """
+        instruction_address = SBAddress(address, target)
+        instruction_list = target.ReadInstructions(instruction_address, 1, self.state.disassembly_syntax)
+        return instruction_list.GetInstructionAtIndex(0)
+
+    def dereference_last_address(
+        self, data: list, target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList
+    ):
+        """
+        Memory data at the last address (second to last in @data list) is
+        either disassembled to an instruction or converted to a string or neither.
+
+        :param data: List of memory addresses/data.
+        :param target: The target object file.
+        :param process: The running process of the target.
+        :param regions: List of memory regions of the process.
+        """
+        last_address = data[-2]
+
+        if is_code(last_address, process, target, regions):
+            instruction = self.read_instruction(target, last_address)
+            if instruction.IsValid():
+                data[-1] = color_string(
+                    f"{instruction.GetMnemonic(target)}{instruction.GetOperands(target)}",
+                    self.color_settings.instruction_color,
+                )
+        else:
+            string = attempt_to_read_string_from_memory(process, last_address)
+            if string != "":
+                data[-1] = color_string(string, self.color_settings.string_color)
+
+    def dereference(
+        self, address: int, offset: int, target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList
+    ):
+        """
+        Dereference a memory @address until it reaches data that cannot be resolved to an address.
+        Memory data at the last address is either disassembled to an instruction or converted to a string or neither.
+        The chain of dereferencing is output.
+
+        :param address: The address to dereference
+        :param offset: The offset of address from a choosen base.
+        :param target: The target object file.
+        :param process: The running process of the target.
+        :param regions: List of memory regions of the process.
+        """
+
+        data = []
+
+        error = SBError()
+        while error.Success():
+            data.append(address)
+            address = process.ReadPointerFromMemory(address, error)
+            if len(data) > 1 and data[-1] in data[:-2]:
+                data.append("[LOOPING]")
+                break
+
+        if len(data) < 2:
+            print_message(MSG_TYPE.ERROR, f"{hex(data[0])} is not accessible.")
+            return
+
+        self.dereference_last_address(data, target, process, regions)
+
+        output = color_string(hex_or_str(data[0]), TERM_COLORS.CYAN.name, rwrap=GLYPHS.VERTICAL_LINE.value)
+        if offset >= 0:
+            output += f"+0x{offset:04x}: "
+        else:
+            output += f"-0x{-offset:04x}: "
+        output += " -> ".join(map(hex_or_str, data[1:]))
+        output_line(output)
+
     @check_process
     def __call__(
         self,
@@ -85,4 +177,4 @@ class DereferenceCommand(BaseCommand):
         end_address = start_address + address_size * lines
         for address in range(start_address, end_address, address_size):
             offset = address - base
-            dereference(address, offset, exe_ctx.target, exe_ctx.process, self.context_handler.regions)
+            self.dereference(address, offset, exe_ctx.target, exe_ctx.process, self.context_handler.regions)
