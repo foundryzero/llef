@@ -9,7 +9,6 @@ from lldb import (
     SBError,
     SBExecutionContext,
     SBFrame,
-    SBInstruction,
     SBMemoryRegionInfo,
     SBMemoryRegionInfoList,
     SBProcess,
@@ -40,32 +39,6 @@ def address_to_filename(target: SBTarget, address: int) -> str:
     filename = file_spec.GetFilename()
 
     return filename
-
-
-def extract_instructions(
-    target: SBTarget, start_address: int, end_address: int, disassembly_flavour: str
-) -> List[SBInstruction]:
-    """
-    Returns a list of instructions between a range of memory address defined by @start_address and @end_address.
-
-    :param target: The target context.
-    :param start_address: The address to start reading instructions from memory.
-    :param end_address: The address to stop reading instruction from memory.
-    :return: A list of instructions.
-    """
-    instructions = []
-    current = start_address
-    while current <= end_address:
-        address = SBAddress(current, target)
-        instruction = target.ReadInstructions(address, 1, disassembly_flavour).GetInstructionAtIndex(0)
-        instructions.append(instruction)
-        instruction_size = instruction.GetByteSize()
-        if instruction_size > 0:
-            current += instruction_size
-        else:
-            break
-
-    return instructions
 
 
 def get_frame_range(frame: SBFrame, target: SBTarget) -> Tuple[str, str]:
@@ -141,9 +114,11 @@ def is_ascii_string(address: SBValue, process: SBProcess) -> bool:
     return attempt_to_read_string_from_memory(process, address) != ""
 
 
-def is_in_section(address: SBValue, target: SBTarget, target_section_name: str):
+def is_in_section(address: SBValue, target: SBTarget, target_section_name: str) -> bool:
     """
     Determines whether a given memory @address exists within a @section of the executable file @target.
+
+    The section's parents are searched to generate a full section name (e.g., __TEXT.__c_string).
 
     :param address: The memory address to check.
     :param target: The target object file.
@@ -153,9 +128,12 @@ def is_in_section(address: SBValue, target: SBTarget, target_section_name: str):
 
     sb_address = target.ResolveLoadAddress(address)
     section = sb_address.GetSection()
-    section_name = section.GetName()
+    full_section_name = ""
+    while section:
+        full_section_name = section.GetName() + "." + full_section_name
+        section = section.GetParent()
 
-    return section_name is not None and target_section_name in section_name
+    return target_section_name in full_section_name
 
 
 def is_text_region(address: SBValue, target: SBTarget, region: SBMemoryRegionInfo) -> bool:
@@ -170,7 +148,7 @@ def is_text_region(address: SBValue, target: SBTarget, region: SBMemoryRegionInf
 
     in_text = False
     if is_file(target, MAGIC_BYTES.MACH.value):
-        if is_in_section(address, target, "__TEXT") or is_in_section(address, target, "__text"):
+        if is_in_section(address, target, "__TEXT"):
             in_text = True
     else:
         file = target.GetExecutable()

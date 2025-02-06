@@ -28,7 +28,7 @@ class LLEFState(metaclass=Singleton):
     # Linux, Mac (Darwin) or Windows
     platform = ""
 
-    disassembly_syntax = None
+    disassembly_syntax = ""
 
     def change_use_color(self, new_value: bool) -> None:
         """

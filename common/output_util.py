@@ -2,9 +2,7 @@
 
 import os
 import re
-from typing import Any, List
-
-from lldb import SBInstruction, SBTarget
+from typing import Any
 
 from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, DEFAULT_TERMINAL_LINES, GLYPHS, MSG_TYPE, TERM_COLORS
 from common.state import LLEFState
@@ -125,55 +123,3 @@ def print_message(msg_type: MSG_TYPE, message: str) -> None:
         output_line(color_string("[-] ", error_color, rwrap=message))
     else:
         raise KeyError(f"{msg_type} is an invalid MSG_TYPE.")
-
-
-def print_instruction(
-    instruction: SBInstruction,
-    base: int,
-    target: SBTarget,
-    color_setting: str = TERM_COLORS.ENDC.name,
-) -> None:
-    """
-    Print formatted @instruction extracted from SBInstruction object.
-
-    :param instruction: The instruction object.
-    :param base: The address base to calculate offsets from.
-    :param target: The target executable.
-    :param color_setting: The color that will be fetched from TERM_COLORS (i.e., TERM_COLORS[color_setting]).
-    """
-
-    address = instruction.GetAddress().GetLoadAddress(target)
-    offset = address - base
-
-    line = hex(address)
-    if offset >= 0:
-        line += f" <+{offset:02}>: "
-    else:
-        line += f" <-{abs(offset):02}>: "
-
-    mnemonic = instruction.GetMnemonic(target) or ""
-    operands = instruction.GetOperands(target) or ""
-    comment = instruction.GetComment(target) or ""
-    if comment != "":
-        comment = f"; {comment}"
-    line += f"{mnemonic:<10}{operands:<30}{comment}"
-
-    output_line(color_string(line, color_setting))
-
-
-def print_instructions(
-    instructions: List[SBInstruction],
-    base: int,
-    target: SBTarget,
-    color_setting: str = TERM_COLORS.ENDC.name,
-) -> None:
-    """
-    Print formatted @instructions extracting information from the SBInstruction objects.
-
-    :param instructions: A list of instruction objects.
-    :param base: The address base to calculate offsets from.
-    :param target: The target executable.
-    :param color_setting: The color that will be fetched from TERM_COLORS (i.e., TERM_COLORS[color_setting]).
-    """
-    for instruction in instructions:
-        print_instruction(instruction, base, target, color_setting)

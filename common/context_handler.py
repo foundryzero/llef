@@ -20,21 +20,13 @@ from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
 from common.color_settings import LLEFColorSettings
 from common.constants import GLYPHS, TERM_COLORS
-from common.output_util import (
-    clear_page,
-    color_string,
-    output_line,
-    print_instruction,
-    print_instructions,
-    print_line,
-    print_line_with_string,
-)
+from common.instruction_util import extract_instructions, print_instruction, print_instructions
+from common.output_util import clear_page, color_string, output_line, print_line, print_line_with_string
 from common.settings import LLEFSettings
 from common.state import LLEFState
 from common.util import (
     address_to_filename,
     attempt_to_read_string_from_memory,
-    extract_instructions,
     find_stack_regions,
     get_frame_arguments,
     get_frame_range,
@@ -317,7 +309,10 @@ class ContextHandler:
 
         pre_instructions = extract_instructions(self.target, frame_start_address, pc - 1, self.state.disassembly_syntax)
         print_instructions(
-            pre_instructions[-3:], frame_start_address, self.target, self.color_settings.instruction_color
+            self.target,
+            pre_instructions[-3:],
+            frame_start_address,
+            self.color_settings,
         )
 
         post_instructions = extract_instructions(self.target, pc, frame_end_address, self.state.disassembly_syntax)
@@ -325,14 +320,20 @@ class ContextHandler:
         if len(post_instructions) > 0:
             pc_instruction = post_instructions[0]
             print_instruction(
+                self.target,
                 pc_instruction,
                 frame_start_address,
-                self.target,
-                self.color_settings.highlighted_instruction_color,
+                self.color_settings,
+                True,
             )
 
             limit = 9 - min(len(pre_instructions), 3)
-            print_instructions(post_instructions[1:limit], frame_start_address, self.target)
+            print_instructions(
+                self.target,
+                post_instructions[1:limit],
+                frame_start_address,
+                self.color_settings,
+            )
 
     def display_threads(self) -> None:
         """Print LLDB formatted thread information"""
@@ -388,12 +389,16 @@ class ContextHandler:
         self.state.disassembly_syntax = "default"
         if LLEFState.version >= [16]:
             self.state.disassembly_syntax = debugger.GetSetting("target.x86-disassembly-flavor").GetStringValue(100)
-        else:
+
+        if self.state.disassembly_syntax == "":
             command_interpreter = debugger.GetCommandInterpreter()
             result = SBCommandReturnObject()
             command_interpreter.HandleCommand("settings show target.x86-disassembly-flavor", result)
             if result.Succeeded():
                 self.state.disassembly_syntax = result.GetOutput().split("=")[1][1:].replace("\n", "")
+
+        if self.state.disassembly_syntax == "":
+            self.state.disassembly_syntax = "default"
 
     def refresh(self, exe_ctx: SBExecutionContext) -> None:
         """Refresh stored values"""
@@ -411,7 +416,7 @@ class ContextHandler:
         else:
             self.regions = None
 
-        if self.state.disassembly_syntax is None:
+        if self.state.disassembly_syntax == "":
             self.load_disassembly_syntax(self.debugger)
 
         if LLEFState.platform == "Darwin":
