@@ -149,9 +149,9 @@ class ContextHandler:
 
         # Add value to line
         err = SBError()
-        memory_value = int.from_bytes(self.process.ReadMemory(addr, size, err), "little")
+        memory_value = self.process.ReadMemory(addr, size, err)
         if err.Success():
-            line += f"0x{memory_value:0{size * 2}x}"
+            line += f"0x{int.from_bytes(memory_value, 'little'):0{size * 2}x}"
         else:
             line += str(err)
 

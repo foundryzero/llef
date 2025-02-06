@@ -9,7 +9,7 @@ from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 from commands.base_command import BaseCommand
 from common.constants import SIZES
 from common.context_handler import ContextHandler
-from common.util import check_version
+from common.util import check_version, output_line
 
 
 class HexdumpCommand(BaseCommand):
@@ -75,6 +75,11 @@ class HexdumpCommand(BaseCommand):
         result: SBCommandReturnObject,
     ) -> None:
         """Handles the invocation of the hexdump command"""
+
+        if not exe_ctx.process.is_alive:
+            output_line("hexdump requires a running process")
+            return
+
         args = self.parser.parse_args(shlex.split(command))
 
         divisions = SIZES[args.type.upper()].value
