@@ -409,7 +409,7 @@ class ContextHandler:
     def load_disassembly_syntax(self, debugger: SBDebugger) -> None:
         """Load the disassembly flavour from LLDB into LLEF's state."""
         self.state.disassembly_syntax = "default"
-        if LLEFState >= [16]:
+        if LLEFState.version >= [16]:
             self.state.disassembly_syntax = debugger.GetSetting("target.x86-disassembly-flavor").GetStringValue(100)
         else:
             command_interpreter = debugger.GetCommandInterpreter()
