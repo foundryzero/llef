@@ -77,14 +77,14 @@ def print_message(msg_type: MSG_TYPE, message: str) -> None:
     """Format and print a @message"""
     info_color = TERM_COLORS.BLUE
     success_color = TERM_COLORS.GREEN
-    error_color = TERM_COLORS.GREEN
+    error_color = TERM_COLORS.RED
 
     if msg_type == MSG_TYPE.INFO:
-        output_line(f"{info_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
+        output_line(f"{info_color.value}[i]{TERM_COLORS.ENDC.value} {message}")
     elif msg_type == MSG_TYPE.SUCCESS:
         output_line(f"{success_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
     elif msg_type == MSG_TYPE.ERROR:
-        output_line(f"{error_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
+        output_line(f"{error_color.value}[-]{TERM_COLORS.ENDC.value} {message}")
 
 
 def print_instruction(line: str, color: TERM_COLORS = TERM_COLORS.ENDC) -> None:
