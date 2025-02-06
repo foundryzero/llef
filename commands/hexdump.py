@@ -8,7 +8,6 @@ from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_command import BaseCommand
 from common.constants import SIZES
-from common.context_handler import ContextHandler
 
 
 class HexdumpCommand(BaseCommand):
@@ -17,6 +16,15 @@ class HexdumpCommand(BaseCommand):
     program: str = "hexdump"
     container = None
     context_handler = None
+
+    # Define alias set, where each entry is an alias with any arguments the command should take.
+    # For example, 'dq' maps to 'hexdump qword'.
+    alias_set = {
+        "dq": "qword",
+        "dd": "dword",
+        "dw": "word",
+        "db": "byte"
+    }
 
     def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
         super().__init__()

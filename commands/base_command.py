@@ -1,15 +1,16 @@
 """Base command definition."""
 
 from abc import ABC, abstractmethod
-from typing import Type
+from typing import Type, Dict
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_container import BaseContainer
 
-
 class BaseCommand(ABC):
     """An abstract base class for all commands."""
+    
+    alias_set = {}
 
     @abstractmethod
     def __init__(self) -> None:
@@ -55,3 +56,8 @@ class BaseCommand(ABC):
             command = f"command script add -c {module_name}.{cls.__name__} {cls.program}"
 
         debugger.HandleCommand(command)
+
+        # If alias_set exists, then load it into LLDB.
+        for alias, arguments in cls.alias_set.items():
+            alias_command = f"command alias {alias} {cls.program} {arguments}"
+            debugger.HandleCommand(alias_command)
