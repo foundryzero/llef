@@ -246,10 +246,31 @@ def extract_arch_from_triple(triple: str) -> str:
     return triple.split("-")[0]
 
 
+def lldb_version_to_clang(lldb_version):
+    """
+    Convert an LLDB version to its corrosponding Clang version.
+
+    :param lldb_version: The LLDB version.
+    :return: The Clang version.
+    """
+
+    clang_version = [0, 0, 0, 0]
+    if lldb_version >= [17, 0, 6]:
+        clang_version = [1600, 0, 26, 3]
+    elif lldb_version >= [16, 0, 0]:
+        clang_version = [1500, 0, 40, 1]
+    elif lldb_version >= [15, 0, 0]:
+        clang_version = [1403, 0, 22, 14, 1]
+
+    return clang_version
+
+
 def check_version(required_version_string):
     def inner(func):
         def wrapper(*args, **kwargs):
             required_version = [int(x) for x in required_version_string.split(".")]
+            if LLEFState.platform == "Darwin":
+                required_version = lldb_version_to_clang(required_version)
             if LLEFState.version < required_version:
                 print(f"error: requires LLDB version {required_version_string} to execute")
                 return

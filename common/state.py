@@ -22,5 +22,8 @@ class LLEFState(metaclass=Singleton):
     # Stores whether color should be used
     use_color = False
 
-    # Stores version of LLDB.
+    # Stores version of LLDB if on Linux. Stores clang verion if on Mac
     version = []
+
+    # Linux, Mac (Darwin) or Windows
+    platform = ""

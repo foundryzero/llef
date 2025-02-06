@@ -10,6 +10,7 @@
 # The __lldb_init_module function automatically loads the stop-hook-handler
 # ---------------------------------------------------------------------
 
+import platform
 from typing import Any, Dict, List, Type, Union
 
 from lldb import SBDebugger
@@ -52,4 +53,10 @@ def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
     for handler in handlers:
         handler.lldb_self_register(debugger, "llef")
 
-    LLEFState.version = [int(x) for x in debugger.GetVersionString().split()[2].split(".")]
+    LLEFState.platform = platform.system()
+    if LLEFState.platform == "Darwin":
+        # Getting Clang version (e.g.  lldb-1600.0.36.3)
+        LLEFState.version = [int(x) for x in debugger.GetVersionString().split()[0].split("-")[1].split(".")]
+    else:
+        # Getting LLDB version (e.g. lldb version 16.0.0)
+        LLEFState.version = [int(x) for x in debugger.GetVersionString().split("version")[1].split()[0].split(".")]
