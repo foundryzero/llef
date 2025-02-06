@@ -4,7 +4,16 @@ import os
 import re
 from typing import Any, List
 
-from lldb import SBError, SBExecutionContext, SBFrame, SBMemoryRegionInfo, SBMemoryRegionInfoList, SBProcess, SBValue
+from lldb import (
+    SBError,
+    SBExecutionContext,
+    SBFrame,
+    SBMemoryRegionInfo,
+    SBMemoryRegionInfoList,
+    SBProcess,
+    SBTarget,
+    SBValue,
+)
 
 from common.constants import ALIGN, GLYPHS, MSG_TYPE, TERM_COLORS
 from common.state import LLEFState
@@ -220,9 +229,81 @@ def check_process(func):
     return wrapper
 
 
+def check_target(func):
+    def wrapper(*args, **kwargs):
+        for arg in list(args) + list(kwargs.values()):
+            if isinstance(arg, SBExecutionContext):
+                if arg.target.IsValid():
+                    return func(*args, **kwargs)
+
+                print_message(MSG_TYPE.ERROR, "Requires a valid target.")
+                return
+
+        print_message(MSG_TYPE.ERROR, "Execution context not found.")
+
+    return wrapper
+
+
+def check_elf(func):
+    def wrapper(*args, **kwargs):
+        for arg in list(args) + list(kwargs.values()):
+            if isinstance(arg, SBExecutionContext):
+                try:
+                    if read_program(arg.target, 0, 4) == b"\x7F\x45\x4C\x46":
+                        return func(*args, **kwargs)
+                    else:
+                        print_message(MSG_TYPE.ERROR, "Target must be an ELF file.")
+                        return
+                except MemoryError:
+                    print_message(MSG_TYPE.ERROR, "couldn't determine file type")
+                    return
+
+        print_message(MSG_TYPE.ERROR, "Execution context not found.")
+
+    return wrapper
+
+
 def hex_int(x):
     """A converter for input arguments in different bases to ints.
     For base 0, the base is determined by the prefix. So, numbers starting `0x` are hex
     and numbers with no prefix are decimal. Base 0 also disallows leading zeros.
     """
     return int(x, 0)
+
+
+def read_program(target: SBTarget, offset: int, n: int):
+    """
+    Read @n bytes from a given @offset from the start of @target object file.
+
+    :param target: The target object file.
+    :param offset: The byte offset of the file to start reading from.
+    :param n: The number of bytes to read from the offset.
+    :return: The read bytes convert to an integer with little endianness.
+    """
+
+    error = SBError()
+    # Executable has always been observed at module 0, but isn't specifically stated in docs.
+    program_module = target.GetModuleAtIndex(0)
+    address = program_module.GetObjectFileHeaderAddress()
+    address.OffsetAddress(offset)
+    data = target.ReadMemory(address, n, error)
+
+    if error.Fail():
+        raise MemoryError(f"Couldn't read memory at file offset {hex(address.GetOffset())}.")
+
+    return data
+
+
+def read_program_int(target: SBTarget, offset: int, n: int):
+    """
+    Read @n bytes from a given @offset from the start of @target object file,
+    and convert to integer by little endian.
+
+    :param target: The target object file.
+    :param offset: The byte offset of the file to start reading from.
+    :param n: The number of bytes to read from the offset.
+    :return: The read bytes convert to an integer with little endianness.
+    """
+
+    data = read_program(target, offset, n)
+    return int.from_bytes(data, "little")
