@@ -149,6 +149,7 @@ class ContextHandler:
         # Add value to line
         err = SBError()
         memory_value = self.process.ReadMemory(addr, size, err)
+
         if err.Success():
             line += f"0x{int.from_bytes(memory_value, 'little'):0{size * 2}x}"
         else:

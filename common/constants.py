@@ -124,12 +124,12 @@ class ARCH_BITS(IntEnum):
 class MAGIC_BYTES(Enum):
     """Magic byte signatures for executable files."""
 
-    ELF = [b"\x7F\x45\x4C\x46"]
+    ELF = [b"\x7f\x45\x4c\x46"]
     MACH = [
-        b"\xFE\xED\xFA\xCE",
-        b"\xFE\xED\xFA\xCF",
-        b"\xCE\xFA\xED\xFE",
-        b"\xCF\xFA\xED\xFE",
+        b"\xfe\xed\xfa\xce",
+        b"\xfe\xed\xfa\xcf",
+        b"\xce\xfa\xed\xfe",
+        b"\xcf\xfa\xed\xfe",
     ]
 
 
