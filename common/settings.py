@@ -81,13 +81,13 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
         default_sections = self.DEFAUL_OUTPUT_ORDER.split(",")
         sections = value.split(",")
         if len(sections) != len(default_sections):
-            print_message(MSG_TYPE.ERROR, f"Requires {len(default_sections)} elements.")
+            print_message(MSG_TYPE.ERROR, f"Requires {len(default_sections)} elements: '{','.join(default_sections)}'")
             raise ValueError
 
-        for section in default_sections:
-            if section not in sections:
-                print_message(MSG_TYPE.ERROR, f"Missing '{section}' from output order.")
-                raise ValueError
+        missing_sections = set(default_sections) - set(sections)
+        if len(missing_sections) > 0:
+            print_message(MSG_TYPE.ERROR, f"Missing '{','.join(missing_sections)}' from output order.")
+            raise ValueError
 
     def validate_settings(self, setting=None) -> bool:
         """
