@@ -1,6 +1,6 @@
 """Utility functions."""
 
-import os
+import shutil
 from argparse import ArgumentTypeError
 from typing import List, Tuple
 
@@ -22,7 +22,7 @@ from common.state import LLEFState
 
 
 def terminal_columns() -> int:
-    return os.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
+    return shutil.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
 
 
 def address_to_filename(target: SBTarget, address: int) -> str:

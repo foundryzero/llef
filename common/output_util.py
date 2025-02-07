@@ -1,7 +1,7 @@
 """Utility functions related to terminal output."""
 
-import os
 import re
+import shutil
 from textwrap import TextWrapper
 from typing import Any
 
@@ -34,7 +34,7 @@ def terminal_columns() -> int:
     terminal environment variables then DEFAULT_TERMINAL_COLUMNS we be returned.
     """
     try:
-        columns = os.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
+        columns = shutil.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
     except OSError:
         columns = DEFAULT_TERMINAL_COLUMNS
 
@@ -88,7 +88,7 @@ def clear_page() -> None:
     printing the next information.
     """
     try:
-        num_lines = os.get_terminal_size().lines
+        num_lines = shutil.get_terminal_size().lines
     except OSError:
         num_lines = DEFAULT_TERMINAL_LINES
 
