@@ -27,6 +27,7 @@ from common.state import LLEFState
 from common.util import (
     address_to_filename,
     attempt_to_read_string_from_memory,
+    find_darwin_heap_regions,
     find_stack_regions,
     get_frame_arguments,
     get_frame_range,
@@ -199,7 +200,7 @@ class ContextHandler:
             color = self.color_settings.code_color
         elif is_stack(reg_value, self.regions, self.stack_regions):
             color = self.color_settings.stack_color
-        elif is_heap(reg_value, self.target, self.regions, self.stack_regions):
+        elif is_heap(reg_value, self.target, self.regions, self.heap_regions):
             color = self.color_settings.heap_color
         else:
             color = None
@@ -422,6 +423,7 @@ class ContextHandler:
 
         if LLEFState.platform == "Darwin":
             self.stack_regions = find_stack_regions(self.process)
+            self.heap_regions = find_darwin_heap_regions(self.process)
 
     def display_context(self, exe_ctx: SBExecutionContext, update_registers: bool) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""

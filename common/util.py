@@ -14,6 +14,11 @@ from lldb import (
     SBProcess,
     SBTarget,
     SBValue,
+    SBExpressionOptions,
+    eNoDynamicValues,
+    eLanguageTypeObjC_plus_plus,
+    value
+    
 )
 
 from common.constants import DEFAULT_TERMINAL_COLUMNS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
@@ -186,19 +191,20 @@ def is_stack(address: SBValue, regions: SBMemoryRegionInfoList, stack_regions: L
 
 
 def is_heap(
-    address: SBValue, target: SBTarget, regions: SBMemoryRegionInfoList, stack_regions: List[SBMemoryRegionInfo]
+    address: SBValue, target: SBTarget, regions: SBMemoryRegionInfoList, darwin_heap_regions: List[Tuple[int, int]]
 ) -> bool:
     """Determines whether an @address points to the heap"""
     heap_bool = False
-    region = SBMemoryRegionInfo()
-    if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
-        if LLEFState.platform == "Darwin":
-            sb_address = SBAddress(address, target)
-            filename = sb_address.GetModule().GetFileSpec().GetFilename()
-            if filename is None and not is_stack(address, regions, stack_regions) and region.IsWritable():
+    if LLEFState.platform == "Darwin":
+        for (lo, hi) in darwin_heap_regions:
+            # print(f"{lo:x} > {address:x} > {hi:x}?")
+            if address >= lo and address < hi:
+                return True 
+    else:
+        region = SBMemoryRegionInfo()
+        if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
+            if region.GetName() == "[heap]":
                 heap_bool = True
-        elif region.GetName() == "[heap]":
-            heap_bool = True
     return heap_bool
 
 
@@ -391,3 +397,129 @@ def find_stack_regions(process: SBProcess) -> List[SBMemoryRegionInfo]:
         stack_regions.append(region)
 
     return stack_regions
+
+def find_darwin_heap_regions(process: SBProcess) -> List[SBMemoryRegionInfo]:
+    """
+    Find all memory regions containing the stack by looping through stack pointers in each frame.
+
+    :return: A list of memory region objects.
+    """
+    # Reverse engineered from https://github.com/llvm-mirror/lldb/blob/master/examples/darwin/heap_find/heap.py
+    # Is essentially modified malloc_info just for regions
+    # Additional info from  https://github.com/apple-oss-distributions/libmalloc/blob/main/include/malloc/malloc.h#L456
+    max_matches = 32
+    expr = """
+/* type defs */
+typedef unsigned natural_t;
+typedef uintptr_t vm_size_t;
+typedef uintptr_t vm_address_t;
+typedef natural_t task_t;
+typedef int kern_return_t;
+#define KERN_SUCCESS 0
+
+
+/* malloc enumeration setup */
+typedef void (*range_callback_t)(task_t task, void *baton, unsigned type, uintptr_t ptr_addr, uintptr_t ptr_size);
+#define MALLOC_PTR_REGION_RANGE_TYPE	2	/* for region containing pointers */
+typedef struct vm_range_t {
+    vm_address_t address;
+    vm_size_t size;
+} vm_range_t;
+typedef kern_return_t (*memory_reader_t)(task_t task, vm_address_t remote_address, vm_size_t size, void **local_memory);
+typedef void (*vm_range_recorder_t)(task_t task, void *baton, unsigned type, vm_range_t *range, unsigned size);
+typedef struct malloc_introspection_t {
+    kern_return_t (*enumerator)(task_t task, void *, unsigned type_mask, vm_address_t zone_address, memory_reader_t reader, vm_range_recorder_t recorder); /* enumerates all the malloc pointers in use */
+} malloc_introspection_t;
+typedef struct malloc_zone_t {
+    void *reserved1[12];
+    struct malloc_introspection_t	*introspect;
+} malloc_zone_t;
+memory_reader_t task_peek = [](task_t task, vm_address_t remote_address, vm_size_t size, void **local_memory) -> kern_return_t {
+    *local_memory = (void*) remote_address;
+    return KERN_SUCCESS;
+};
+vm_address_t *zones = 0;
+unsigned int num_zones = 0;task_t task = 0;
+kern_return_t err = (kern_return_t)malloc_get_all_zones (task, task_peek, &zones, &num_zones);
+
+/* search callbac setupk */
+#define MAX_MATCHES %u
+
+struct $malloc_region {
+    uintptr_t lo_addr;
+    uintptr_t hi_addr;
+};
+
+typedef struct callback_baton_t {
+    range_callback_t callback;
+    unsigned num_matches;
+    $malloc_region matches[MAX_MATCHES + 1]; // Null terminate
+} callback_baton_t;
+
+/* callback */
+range_callback_t range_callback = [](task_t task, void *baton, unsigned type, uintptr_t ptr_addr, uintptr_t ptr_size) -> void {
+    callback_baton_t *lldb_info = (callback_baton_t *)baton;
+    /* upper limit for our array */
+    if (lldb_info->num_matches < MAX_MATCHES) {
+        uintptr_t lo = ptr_addr;
+        uintptr_t hi = lo + ptr_size;
+        /* add to list */
+        lldb_info->matches[lldb_info->num_matches].lo_addr = lo;
+        lldb_info->matches[lldb_info->num_matches].hi_addr = hi;
+        lldb_info->num_matches++;
+
+    }
+};
+callback_baton_t baton = { range_callback, 0, {0} };
+
+if (KERN_SUCCESS == err)
+{
+    for (unsigned int i=0; i<num_zones; ++i)
+    {
+        /* for all heap zones */
+        const malloc_zone_t *zone = (const malloc_zone_t *)zones[i];
+        if (zone && zone->introspect)
+            /* introspection API will call our callback for reach heap region (rather than each allocation as in malloc_info) */
+            zone->introspect->enumerator (task,
+                                          &baton,
+                                          MALLOC_PTR_REGION_RANGE_TYPE,
+                                          (vm_address_t)zone,
+                                          task_peek,
+                                          [] (task_t task, void *baton, unsigned type, vm_range_t *ranges, unsigned size) -> void
+                                          {
+                                              range_callback_t callback = ((callback_baton_t *)baton)->callback;
+                                              for (unsigned i=0; i<size; ++i)
+                                              {
+                                                  callback (task, baton, type, ranges[i].address, ranges[i].size);
+                                              }
+                                          });
+    }
+}
+/* return the value */
+baton.matches
+""" % max_matches
+    # run the above c code
+    frame = process.GetSelectedThread().GetSelectedFrame()
+    expr_options = SBExpressionOptions()
+    expr_options.SetIgnoreBreakpoints(True)
+    expr_options.SetFetchDynamicValue(eNoDynamicValues)
+    expr_options.SetTimeoutInMicroSeconds(
+        5 * 1000 * 1000)  # 5 second timeout
+    expr_options.SetTryAllThreads(False)
+    expr_options.SetLanguage(eLanguageTypeObjC_plus_plus)
+    expr_sbvalue = frame.EvaluateExpression(expr, expr_options)
+    # print("expression result:")
+    # print(expr_sbvalue)
+    heap_regions = []
+
+    if expr_sbvalue.error.Success():
+        for idx in range(max_matches):
+            match_value = value(expr_sbvalue)
+            match_entry = match_value[idx]
+            lo_addr = match_entry.lo_addr.sbvalue.unsigned
+            hi_addr = match_entry.hi_addr.sbvalue.unsigned
+            if lo_addr == 0:
+                break
+            heap_regions.append((lo_addr, hi_addr))
+
+    return heap_regions
