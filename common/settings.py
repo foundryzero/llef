@@ -81,6 +81,10 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     def truncate_output(self):
         return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "truncate_output", fallback=True)
 
+    @property
+    def enable_darwin_heap_scan(self):
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "enable_darwin_heap_scan", fallback=False)
+
     def validate_output_order(self, value: str):
         default_sections = self.DEFAUL_OUTPUT_ORDER.split(",")
         sections = value.split(",")

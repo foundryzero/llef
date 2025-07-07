@@ -1,6 +1,6 @@
 import os
 from string import printable
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type
 
 from lldb import (
     SBAddress,
@@ -27,6 +27,7 @@ from common.state import LLEFState
 from common.util import (
     address_to_filename,
     attempt_to_read_string_from_memory,
+    find_darwin_heap_regions,
     find_stack_regions,
     get_frame_arguments,
     get_frame_range,
@@ -50,6 +51,8 @@ class ContextHandler:
     settings: LLEFSettings
     color_settings: LLEFColorSettings
     state: LLEFState
+    darwin_stack_regions: List[SBMemoryRegionInfo]
+    darwin_heap_regions: List[Tuple[int, int]]
 
     def __init__(
         self,
@@ -62,8 +65,9 @@ class ContextHandler:
         self.settings = LLEFSettings(debugger)
         self.color_settings = LLEFColorSettings()
         self.state = LLEFState()
-        self.stack_regions = List[SBMemoryRegionInfo]
         self.state.change_use_color(self.settings.color_output)
+        self.darwin_stack_regions = None
+        self.darwin_heap_regions = None
 
     def generate_rebased_address_string(self, address: SBAddress) -> str:
         module = address.GetModule()
@@ -119,6 +123,7 @@ class ContextHandler:
     def print_stack_addr(self, addr: SBValue, offset: int) -> None:
         """Produce a printable line containing information about a given stack @addr and print it"""
         # Add stack address and offset to line
+
         line = color_string(
             hex(addr.GetValueAsUnsigned()),
             self.color_settings.stack_address_color,
@@ -197,9 +202,9 @@ class ContextHandler:
 
         if is_code(reg_value, self.process, self.target, self.regions):
             color = self.color_settings.code_color
-        elif is_stack(reg_value, self.regions, self.stack_regions):
+        elif is_stack(reg_value, self.regions, self.darwin_stack_regions):
             color = self.color_settings.stack_color
-        elif is_heap(reg_value, self.target, self.regions, self.stack_regions):
+        elif is_heap(reg_value, self.target, self.regions, self.darwin_stack_regions, self.darwin_heap_regions):
             color = self.color_settings.heap_color
         else:
             color = None
@@ -245,7 +250,13 @@ class ContextHandler:
         legend = "[ Legend: "
         legend += color_string("Modified register", self.color_settings.modified_register_color, rwrap=" | ")
         legend += color_string("Code", self.color_settings.code_color, rwrap=" | ")
-        legend += color_string("Heap", self.color_settings.heap_color, rwrap=" | ")
+
+        # Only set when platform is Darwin (iOS, MacOS, etc) and darwin heap scan is enabled in settings.
+        if self.darwin_heap_regions is not None:
+            legend += color_string("Heap (Darwin heap scan)", self.color_settings.heap_color, rwrap=" | ")
+        else:
+            legend += color_string("Heap", self.color_settings.heap_color, rwrap=" | ")
+
         legend += color_string("Stack", self.color_settings.stack_color, rwrap=" | ")
         legend += color_string("String", self.color_settings.string_color, rwrap=" ]")
         output_line(legend)
@@ -421,7 +432,13 @@ class ContextHandler:
             self.load_disassembly_syntax(self.debugger)
 
         if LLEFState.platform == "Darwin":
-            self.stack_regions = find_stack_regions(self.process)
+            self.darwin_stack_regions = find_stack_regions(self.process)
+            if self.settings.enable_darwin_heap_scan:
+                self.darwin_heap_regions = find_darwin_heap_regions(self.process)
+            else:
+                # Setting darwin_heap_regions to None will cause the fallback heap
+                # scanning method to be used.
+                self.darwin_heap_regions = None
 
     def display_context(self, exe_ctx: SBExecutionContext, update_registers: bool) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""

@@ -1,5 +1,6 @@
 """Utility functions."""
 
+import os
 import shutil
 from argparse import ArgumentTypeError
 from typing import List, Tuple
@@ -8,12 +9,16 @@ from lldb import (
     SBAddress,
     SBError,
     SBExecutionContext,
+    SBExpressionOptions,
     SBFrame,
     SBMemoryRegionInfo,
     SBMemoryRegionInfoList,
     SBProcess,
     SBTarget,
     SBValue,
+    eLanguageTypeObjC_plus_plus,
+    eNoDynamicValues,
+    value,
 )
 
 from common.constants import DEFAULT_TERMINAL_COLUMNS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
@@ -27,7 +32,7 @@ def terminal_columns() -> int:
 
 def address_to_filename(target: SBTarget, address: int) -> str:
     """
-    Maps a memory address to its corrosponding executable/library and returns the filename.
+    Maps a memory address to its corresponding executable/library and returns the filename.
 
     :param target: The target context.
     :param address: The memory address to resolve.
@@ -171,13 +176,13 @@ def is_code(address: SBValue, process: SBProcess, target: SBTarget, regions: SBM
     return code_bool
 
 
-def is_stack(address: SBValue, regions: SBMemoryRegionInfoList, stack_regions: List[SBMemoryRegionInfo]) -> bool:
+def is_stack(address: SBValue, regions: SBMemoryRegionInfoList, darwin_stack_regions: List[SBMemoryRegionInfo]) -> bool:
     """Determines whether an @address points to the stack"""
 
     stack_bool = False
     region = SBMemoryRegionInfo()
     if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
-        if LLEFState.platform == "Darwin" and region in stack_regions:
+        if LLEFState.platform == "Darwin" and region in darwin_stack_regions:
             stack_bool = True
         elif region.GetName() == "[stack]":
             stack_bool = True
@@ -186,19 +191,30 @@ def is_stack(address: SBValue, regions: SBMemoryRegionInfoList, stack_regions: L
 
 
 def is_heap(
-    address: SBValue, target: SBTarget, regions: SBMemoryRegionInfoList, stack_regions: List[SBMemoryRegionInfo]
+    address: SBValue,
+    target: SBTarget,
+    regions: SBMemoryRegionInfoList,
+    stack_regions: List[SBMemoryRegionInfo],
+    darwin_heap_regions: List[Tuple[int, int]],
 ) -> bool:
     """Determines whether an @address points to the heap"""
     heap_bool = False
-    region = SBMemoryRegionInfo()
-    if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
-        if LLEFState.platform == "Darwin":
-            sb_address = SBAddress(address, target)
-            filename = sb_address.GetModule().GetFileSpec().GetFilename()
-            if filename is None and not is_stack(address, regions, stack_regions) and region.IsWritable():
+
+    if darwin_heap_regions is not None:
+        # Only set when platform is Darwin (iOS, MacOS, etc) and darwin heap scan is enabled in settings.
+        for lo, hi in darwin_heap_regions:
+            if address >= lo and address < hi:
                 heap_bool = True
-        elif region.GetName() == "[heap]":
-            heap_bool = True
+    else:
+        region = SBMemoryRegionInfo()
+        if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
+            if LLEFState.platform == "Darwin":
+                sb_address = SBAddress(address, target)
+                filename = sb_address.GetModule().GetFileSpec().GetFilename()
+                if filename is None and not is_stack(address, regions, stack_regions) and region.IsWritable():
+                    heap_bool = True
+            elif region.GetName() == "[heap]":
+                heap_bool = True
     return heap_bool
 
 
@@ -220,7 +236,7 @@ def verify_version(version: List[int], target_version: List[int]) -> bool:
 
 def lldb_version_to_clang(lldb_version):
     """
-    Convert an LLDB version to its corrosponding Clang version.
+    Convert an LLDB version to its corresponding Clang version.
 
     :param lldb_version: The LLDB version.
     :return: The Clang version.
@@ -332,7 +348,7 @@ def positive_int(x):
 
 
 def hex_or_str(x):
-    """Convert to formated hex if an integer, otherwise return the value."""
+    """Convert to formatted hex if an integer, otherwise return the value."""
     if isinstance(x, int):
         return f"0x{x:016x}"
 
@@ -391,3 +407,52 @@ def find_stack_regions(process: SBProcess) -> List[SBMemoryRegionInfo]:
         stack_regions.append(region)
 
     return stack_regions
+
+
+def find_darwin_heap_regions(process: SBProcess) -> List[Tuple[int, int]]:
+    """
+    Find memory heap regions on Darwin.
+
+    :return: List[Tuple[int, int]]: A list containing values for min and max ranges for heap regions on Darwin.
+    """
+
+    MAX_MATCHES = 128
+
+    # Define Objective C++ code to be run as an LLDB expression.
+
+    # Read template file, replace MAX_MATCHES value.
+    common_dir = os.path.dirname(os.path.abspath(__file__))
+    expr_file_path = os.path.join(common_dir, "expressions", "darwin_get_malloc_zones.mm")
+
+    with open(expr_file_path, "r") as expr_file:
+        expr = expr_file.read().replace("{{MAX_MATCHES}}", str(MAX_MATCHES))
+
+    # Return SBFrame stack frame object from current thread.
+    frame = process.GetSelectedThread().GetSelectedFrame()
+
+    # Set options for evaluating Objective C++ code.
+    expr_options = SBExpressionOptions()
+    expr_options.SetIgnoreBreakpoints(True)
+    expr_options.SetFetchDynamicValue(eNoDynamicValues)
+    # Set a 3 second timeout.
+    expr_options.SetTimeoutInMicroSeconds(3 * 1000 * 1000)
+    expr_options.SetTryAllThreads(False)
+    expr_options.SetLanguage(eLanguageTypeObjC_plus_plus)
+
+    expr_sbvalue = frame.EvaluateExpression(expr, expr_options)
+    match_value = value(expr_sbvalue)
+    heap_regions = []
+
+    # Populate heap regions from expression result.
+    if expr_sbvalue.error.Success():
+        for count in range(MAX_MATCHES):
+            match_entry = match_value[count]
+            lo_addr = match_entry.lo_addr.sbvalue.unsigned
+            hi_addr = match_entry.hi_addr.sbvalue.unsigned
+            if lo_addr != 0:
+                heap_regions.append((lo_addr, hi_addr))
+    else:
+        # Fallback to default way to calculate heap regions in error condition.
+        heap_regions = None
+
+    return heap_regions
