@@ -94,12 +94,13 @@ def print_instruction(
     operands = instruction.GetOperands(target) or ""
     comment = instruction.GetComment(target) or ""
 
+    ops_width = len(operands)  # visible length, for spacing (before colouring)
     if not highlight:
         operands = color_operands(operands, color_settings)
 
     if comment != "":
         comment = f"; {comment}"
-    line += f"{mnemonic:<10}{operands:<30}{comment}"
+    line += f"{mnemonic:<10}{operands.ljust(35 + len(operands) - ops_width)}{comment}"
 
     if highlight:
         line = color_string(line, color_settings.highlighted_instruction_color)
