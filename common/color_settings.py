@@ -1,7 +1,6 @@
 """Color settings module"""
 
 import os
-from typing import List
 
 from common.base_settings import BaseLLEFSettings
 from common.constants import TERM_COLORS
@@ -17,7 +16,7 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
     LLEF_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".llef_colors")
     GLOBAL_SECTION = "LLEF"
 
-    supported_colors: List[str] = []
+    supported_colors: list[str] = []
 
     @property
     def register_color(self) -> str:
@@ -129,7 +128,7 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
                 output_line(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
         return valid
 
-    def list(self) -> None:
+    def list_settings(self) -> None:
         """
         List all color settings and their current values, colored appropriately
         """

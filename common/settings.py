@@ -1,6 +1,7 @@
 """Global settings module"""
 
 import os
+from typing import Union
 
 from lldb import SBDebugger
 
@@ -19,7 +20,7 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     LLEF_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".llef")
     GLOBAL_SECTION = "LLEF"
     DEFAUL_OUTPUT_ORDER = "registers,stack,code,threads,trace"
-    debugger: SBDebugger | None = None
+    debugger: Union[SBDebugger, None] = None
 
     @property
     def color_output(self) -> bool:
@@ -57,7 +58,7 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
         return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_trace", fallback=True)
 
     @property
-    def force_arch(self) -> str | None:
+    def force_arch(self) -> Union[str, None]:
         arch = self._RAW_CONFIG.get(self.GLOBAL_SECTION, "force_arch", fallback=None)
         return None if arch not in supported_arch else arch
 
@@ -84,6 +85,28 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     @property
     def enable_darwin_heap_scan(self) -> bool:
         return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "enable_darwin_heap_scan", fallback=False)
+
+    @property
+    def go_support_level(self) -> str:
+        support_level = self._RAW_CONFIG.get(self.GLOBAL_SECTION, "go_support_level", fallback="auto").lower()
+        return "auto" if support_level not in ("disable", "auto", "force") else support_level
+
+    @property
+    def max_trace_length(self) -> int:
+        return self._RAW_CONFIG.getint(self.GLOBAL_SECTION, "max_trace_length", fallback=10)
+
+    @property
+    def stack_view_size(self) -> int:
+        return self._RAW_CONFIG.getint(self.GLOBAL_SECTION, "stack_view_size", fallback=12)
+
+    @property
+    def max_disassembly_length(self) -> int:
+        return self._RAW_CONFIG.getint(self.GLOBAL_SECTION, "max_disassembly_length", fallback=9)
+
+    @property
+    def go_confidence_threshold(self) -> str:
+        threshold = self._RAW_CONFIG.get(self.GLOBAL_SECTION, "go_confidence_threshold", fallback="low").lower()
+        return "low" if threshold not in ("low", "medium", "high") else threshold
 
     def validate_output_order(self, value: str) -> None:
         default_sections = self.DEFAUL_OUTPUT_ORDER.split(",")

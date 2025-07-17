@@ -10,6 +10,8 @@ class Aarch64(BaseArch):
 
     bits = 64
 
+    max_instr_size = 4
+
     gpr_registers = [
         "x0",
         "x1",

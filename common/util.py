@@ -3,7 +3,8 @@
 import os
 import shutil
 from argparse import ArgumentTypeError
-from typing import Any, Callable, List, Tuple
+from collections.abc import Callable
+from typing import Any, Union
 
 from lldb import (
     SBAddress,
@@ -22,7 +23,9 @@ from lldb import (
 )
 
 from common.constants import DEFAULT_TERMINAL_COLUMNS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
+from common.golang.util import go_find_func_name_offset, perform_go_functions
 from common.output_util import print_message
+from common.settings import LLEFSettings
 from common.state import LLEFState
 
 
@@ -43,10 +46,13 @@ def address_to_filename(target: SBTarget, address: int) -> str:
     file_spec = module.GetSymbolFileSpec()
     filename = file_spec.GetFilename()
 
+    if filename is None:
+        filename = module.GetFileSpec().GetFilename()
+
     return filename
 
 
-def get_frame_range(frame: SBFrame, target: SBTarget) -> Tuple[int, int]:
+def get_frame_range(frame: SBFrame, target: SBTarget) -> tuple[int, int]:
     function = frame.GetFunction()
     if function:
         start_address = function.GetStartAddress().GetLoadAddress(target)
@@ -58,16 +64,39 @@ def get_frame_range(frame: SBFrame, target: SBTarget) -> Tuple[int, int]:
     return start_address, end_address
 
 
-def get_registers(frame: SBFrame, frame_type: str) -> List[SBValue]:
+def get_registers(frame: SBFrame, frame_type: str) -> Union[SBValue, list[SBValue]]:
     """
     Returns the registers in @frame that are of the specified @type.
     A @type is a string defined in LLDB, e.g. "General Purpose"
     """
-    registers = []
+    registers: Union[SBValue, list[SBValue]] = []
     for regs in frame.GetRegisters():
-        if frame_type.lower() in regs.GetName().lower():
-            registers = regs
+        regs_name = regs.GetName()
+        if regs_name is not None:
+            if frame_type.lower() in regs_name.lower():
+                registers = regs
     return registers
+
+
+def get_funcinfo_from_frame(settings: LLEFSettings, target: SBTarget, frame: SBFrame) -> tuple[str, int]:
+    """
+    Retrieves a best-effort function name and offset the PC is within it, given the current frame.
+
+    :param LLEFSettings settings: The LLEFSettings object for determining the Go support level.
+    :param SBTarget target: The target associated with the current process. For converting file->load addresses.
+    :param SBFrame frame: The debugger frame.
+    :return tuple[str, int]: A pair of (function name, offset).
+    """
+    pc = frame.GetPC()  # Returns the load address
+    if perform_go_functions(settings):
+        pair = go_find_func_name_offset(pc)
+        if pair[0]:
+            return pair
+
+    func = frame.GetFunction()
+    if func:
+        return (func.GetName(), pc - func.GetStartAddress().GetLoadAddress(target))
+    return (frame.GetSymbol().GetName(), pc - frame.GetSymbol().GetStartAddress().GetLoadAddress(target))
 
 
 def get_frame_arguments(frame: SBFrame, frame_argument_name_color: TERM_COLORS) -> str:
@@ -165,7 +194,7 @@ def is_text_region(address: int, target: SBTarget, region: SBMemoryRegionInfo) -
     return in_text
 
 
-def is_code(address: int, process: SBProcess, target: SBTarget, regions: SBMemoryRegionInfoList | None) -> bool:
+def is_code(address: int, process: SBProcess, target: SBTarget, regions: Union[SBMemoryRegionInfoList, None]) -> bool:
     """Determines whether an @address points to code"""
     region = SBMemoryRegionInfo()
     code_bool = False
@@ -177,7 +206,7 @@ def is_code(address: int, process: SBProcess, target: SBTarget, regions: SBMemor
 
 
 def is_stack(
-    address: int, regions: SBMemoryRegionInfoList | None, darwin_stack_regions: List[SBMemoryRegionInfo]
+    address: int, regions: Union[SBMemoryRegionInfoList, None], darwin_stack_regions: list[SBMemoryRegionInfo]
 ) -> bool:
     """Determines whether an @address points to the stack"""
 
@@ -195,9 +224,9 @@ def is_stack(
 def is_heap(
     address: int,
     target: SBTarget,
-    regions: SBMemoryRegionInfoList | None,
-    stack_regions: List[SBMemoryRegionInfo],
-    darwin_heap_regions: List[Tuple[int, int]] | None,
+    regions: Union[SBMemoryRegionInfoList, None],
+    stack_regions: list[SBMemoryRegionInfo],
+    darwin_heap_regions: Union[list[tuple[int, int]], None],
 ) -> bool:
     """Determines whether an @address points to the heap"""
     heap_bool = False
@@ -220,12 +249,7 @@ def is_heap(
     return heap_bool
 
 
-def extract_arch_from_triple(triple: str) -> str:
-    """Extracts the architecture from triple string."""
-    return triple.split("-")[0]
-
-
-def verify_version(version: List[int], target_version: List[int]) -> bool:
+def verify_version(version: list[int], target_version: list[int]) -> bool:
     """Checks if the @version is greater than or equal to the @target_version."""
     length_difference = len(target_version) - len(version)
     if length_difference > 0:
@@ -255,9 +279,9 @@ def lldb_version_to_clang(lldb_version: list[int]) -> list[int]:
     return clang_version
 
 
-def check_version(required_version_string: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    def inner(func: Callable[..., Any]) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+def check_version(required_version_string: str):
+    def inner(func):
+        def wrapper(*args, **kwargs):
             required_version = [int(x) for x in required_version_string.split(".")]
             if LLEFState.platform == "Darwin":
                 required_version = lldb_version_to_clang(required_version)
@@ -308,7 +332,7 @@ def check_target(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-def is_file(target: SBTarget, expected_magic_bytes: List[bytes]) -> bool:
+def is_file(target: SBTarget, expected_magic_bytes: list[bytes]) -> bool:
     """Read signature of @target file and compare to expected magic bytes."""
     magic_bytes = read_program(target, 0, 4)
     return magic_bytes in expected_magic_bytes
@@ -349,7 +373,7 @@ def positive_int(x: str) -> int:
     return int_x
 
 
-def hex_or_str(x: str | int) -> str:
+def hex_or_str(x: Union[str, int]) -> str:
     """Convert to formatted hex if an integer, otherwise return the value."""
     if isinstance(x, int):
         return f"0x{x:016x}"
@@ -395,7 +419,7 @@ def read_program_int(target: SBTarget, offset: int, n: int) -> int:
     return int.from_bytes(data, "little")
 
 
-def find_stack_regions(process: SBProcess) -> List[SBMemoryRegionInfo]:
+def find_stack_regions(process: SBProcess) -> list[SBMemoryRegionInfo]:
     """
     Find all memory regions containing the stack by looping through stack pointers in each frame.
 
@@ -411,11 +435,11 @@ def find_stack_regions(process: SBProcess) -> List[SBMemoryRegionInfo]:
     return stack_regions
 
 
-def find_darwin_heap_regions(process: SBProcess) -> List[Tuple[int, int]] | None:
+def find_darwin_heap_regions(process: SBProcess) -> Union[list[tuple[int, int]], None]:
     """
     Find memory heap regions on Darwin.
 
-    :return: List[Tuple[int, int]]: A list containing values for min and max ranges for heap regions on Darwin.
+    :return: list[tuple[int, int]]: A list containing values for min and max ranges for heap regions on Darwin.
     """
 
     MAX_MATCHES = 128

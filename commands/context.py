@@ -2,7 +2,7 @@
 
 import argparse
 import shlex
-from typing import Any, Dict
+from typing import Any
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
@@ -17,7 +17,7 @@ class ContextCommand(BaseCommand):
     program: str = "context"
     container = None
 
-    def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)

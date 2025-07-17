@@ -3,7 +3,7 @@
 import argparse
 import shlex
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Union
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
@@ -17,9 +17,9 @@ class BaseSettingsCommand(BaseCommand, ABC):
 
     program: str = ""
     container = None
-    settings: BaseLLEFSettings | None = None
+    settings: Union[BaseLLEFSettings, None] = None
 
-    def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
         self.parser = self.get_command_parser()
 
@@ -56,7 +56,7 @@ class BaseSettingsCommand(BaseCommand, ABC):
             raise AttributeError("Class not properly initialised: self.settings is None")
 
         if args.action == "list":
-            self.settings.list()
+            self.settings.list_settings()
         elif args.action == "save":
             self.settings.save()
         elif args.action == "reload":

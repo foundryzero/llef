@@ -1,6 +1,5 @@
-import os
 from string import printable
-from typing import List, Optional, Tuple, Type
+from typing import Union
 
 from lldb import (
     SBAddress,
@@ -21,8 +20,17 @@ from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
 from common.color_settings import LLEFColorSettings
 from common.constants import GLYPHS, TERM_COLORS
+from common.golang.improvements import go_improve_backtrace, go_improve_function, go_improve_pointer_line, go_stop_hook
+from common.golang.util import addr_is_go_fp, perform_go_functions
 from common.instruction_util import extract_instructions, print_instruction, print_instructions
-from common.output_util import clear_page, color_string, output_line, print_line, print_line_with_string
+from common.output_util import (
+    clear_page,
+    color_string,
+    generate_rebased_address_string,
+    output_line,
+    print_line,
+    print_line_with_string,
+)
 from common.settings import LLEFSettings
 from common.state import LLEFState
 from common.util import (
@@ -32,7 +40,9 @@ from common.util import (
     find_stack_regions,
     get_frame_arguments,
     get_frame_range,
+    get_funcinfo_from_frame,
     get_registers,
+    hex_or_str,
     is_code,
     is_heap,
     is_stack,
@@ -46,15 +56,14 @@ class ContextHandler:
     process: SBProcess
     target: SBTarget
     thread: SBThread
-    arch: Type[BaseArch]
+    arch: type[BaseArch]
     debugger: SBDebugger
-    exe_ctx: SBExecutionContext
     settings: LLEFSettings
     color_settings: LLEFColorSettings
-    regions: SBMemoryRegionInfoList | None
+    regions: Union[SBMemoryRegionInfoList, None]
     state: LLEFState
-    darwin_stack_regions: List[SBMemoryRegionInfo]
-    darwin_heap_regions: List[Tuple[int, int]] | None
+    darwin_stack_regions: list[SBMemoryRegionInfo]
+    darwin_heap_regions: Union[list[tuple[int, int]], None]
 
     def __init__(
         self,
@@ -71,18 +80,8 @@ class ContextHandler:
         self.darwin_stack_regions = []
         self.darwin_heap_regions = None
 
-    def generate_rebased_address_string(self, address: SBAddress) -> str:
-        module = address.GetModule()
-
-        if module is not None and self.settings.rebase_addresses is True:
-            file_name = os.path.basename(str(module.file))
-            rebased_address = address.GetFileAddress() + self.settings.rebase_offset
-            return color_string(f"({file_name} {rebased_address:#x})", self.color_settings.rebased_address_color)
-
-        return ""
-
     def generate_printable_line_from_pointer(
-        self, pointer: int, address_containing_pointer: Optional[int] = None
+        self, pointer: int, address_containing_pointer: Union[int, None] = None
     ) -> str:
         """
         Generate a line from a memory address (@pointer) that contains relevant
@@ -93,27 +92,51 @@ class ContextHandler:
         line = ""
         pointer_value = SBAddress(pointer, self.target)
 
-        if pointer_value.symbol.IsValid():
-            offset = pointer_value.offset - pointer_value.symbol.GetStartAddress().offset
-            line += f" {self.generate_rebased_address_string(pointer_value)} {GLYPHS.RIGHT_ARROW.value}"
-            line += color_string(
-                f"<{pointer_value.symbol.name}+{offset}>", self.color_settings.dereferenced_value_color
+        if perform_go_functions(self.settings):
+            line = go_improve_pointer_line(
+                self.process,
+                self.target,
+                self.regions,
+                pointer,
+                address_containing_pointer,
+                self.settings,
+                self.color_settings,
             )
 
-        referenced_string = attempt_to_read_string_from_memory(self.process, pointer_value.GetLoadAddress(self.target))
+        if line == "":
+            # Fall back to generic annotations if language-specific annotation yielded nothing.
+            if pointer_value.symbol.IsValid():
+                offset = pointer_value.offset - pointer_value.symbol.GetStartAddress().offset
+                rebased = generate_rebased_address_string(
+                    pointer_value,
+                    self.settings.rebase_addresses,
+                    self.settings.rebase_offset,
+                    self.color_settings.rebased_address_color,
+                )
+                line += f" {rebased} {GLYPHS.RIGHT_ARROW.value}"
+                line += color_string(
+                    f"<{pointer_value.symbol.name}+{offset}>", self.color_settings.dereferenced_value_color
+                )
 
-        if len(referenced_string) > 0 and referenced_string.isprintable():
-            # Only add this to the line if there are any printable characters in refd_string
-            referenced_string = referenced_string.replace("\n", " ")
-            line += color_string(
-                referenced_string, self.color_settings.string_color, f' {GLYPHS.RIGHT_ARROW.value} ("', "?)"
+            referenced_string = attempt_to_read_string_from_memory(
+                self.process, pointer_value.GetLoadAddress(self.target)
             )
+
+            if len(referenced_string) > 0 and referenced_string.isprintable():
+                # Only add this to the line if all characters in referenced_string are printable.
+                referenced_string = referenced_string.replace("\n", " ")
+                line += color_string(
+                    referenced_string, self.color_settings.string_color, f' {GLYPHS.RIGHT_ARROW.value} ("', "?)"
+                )
 
         if address_containing_pointer is not None:
             registers_pointing_to_address = []
             for register in get_registers(self.frame, self.arch().gpr_key):
                 if register.GetValueAsUnsigned() == address_containing_pointer:
                     registers_pointing_to_address.append(f"${register.GetName()}")
+
+            if addr_is_go_fp(self.settings, address_containing_pointer, self.frame):
+                registers_pointing_to_address.append("(Go Frame Pointer)")
             if len(registers_pointing_to_address) > 0:
                 reg_list = ", ".join(registers_pointing_to_address)
                 line += color_string(
@@ -122,26 +145,29 @@ class ContextHandler:
 
         return line
 
-    def print_stack_addr(self, addr: SBValue, offset: int) -> None:
+    def print_stack_addr(self, addr: int, offset: int) -> None:
         """Produce a printable line containing information about a given stack @addr and print it"""
         # Add stack address and offset to line
 
         line = color_string(
-            hex(addr.GetValueAsUnsigned()),
+            hex(addr),
             self.color_settings.stack_address_color,
             rwrap=f"{GLYPHS.VERTICAL_LINE.value}+{offset:04x}: ",
         )
 
         # Add value to line
+        ptr_bits = self.arch().bits
         err = SBError()
-        stack_value = self.process.ReadPointerFromMemory(addr.GetValueAsUnsigned(), err)
-        if err.Success():
-            line += f"0x{stack_value:0{self.arch().bits // 4}x}"
-        else:
-            # Shouldn't happen as stack should always contain something
-            line += str(err)
+        if addr >= 0 and addr + (ptr_bits // 8) <= 1 << ptr_bits:
+            stack_value = self.process.ReadPointerFromMemory(addr, err)
+            if err.Success():
+                line += f"0x{stack_value:0{ptr_bits // 4}x}"
+                line += self.generate_printable_line_from_pointer(stack_value, addr)
 
-        line += self.generate_printable_line_from_pointer(stack_value, addr.GetValueAsUnsigned())
+        # Rapidly stepping through programs may cause either of the above if statements to become False.
+        # This is due to LLDB asynchronicity - race conditions cause it to give up on returning accurate information.
+        # So leave the right-hand portion of the line blank rather than displaying a misleading error.
+
         output_line(line)
 
     def print_memory_address(self, addr: int, offset: int, size: int) -> None:
@@ -284,8 +310,9 @@ class ContextHandler:
             register_list = self.arch().gpr_registers
 
         for reg in register_list:
-            if self.frame.register[reg] is not None:
-                self.print_register(self.frame.register[reg])
+            reg_val = self.frame.register[reg]
+            if reg_val is not None:
+                self.print_register(reg_val)
         for flag_register in self.arch().flag_registers:
             if self.frame.register[flag_register.name] is not None:
                 self.print_flags_register(flag_register)
@@ -298,10 +325,11 @@ class ContextHandler:
             line_color=self.color_settings.line_color,
             string_color=self.color_settings.section_header_color,
         )
-        for inc in range(0, self.arch().bits, 8):
+
+        ptr_width = self.arch().bits // 8
+        for inc in range(0, ptr_width * self.settings.stack_view_size, ptr_width):
             stack_pointer = self.frame.GetSP()
-            addr = self.target.EvaluateExpression(f"{stack_pointer} + {inc}")
-            self.print_stack_addr(addr, inc)
+            self.print_stack_addr(stack_pointer + inc, inc)
 
     def display_code(self) -> None:
         """
@@ -316,18 +344,31 @@ class ContextHandler:
         pc = self.frame.GetPC()
 
         filename = address_to_filename(self.target, pc)
-        function_name = self.frame.GetFunctionName()
-        output_line(f"{filename}'{function_name}:")
+        function_name = self.frame.GetFunctionName() or "?"
 
         frame_start_address, frame_end_address = get_frame_range(self.frame, self.target)
+        function_start = frame_start_address
 
-        pre_instructions = extract_instructions(self.target, frame_start_address, pc - 1, self.state.disassembly_syntax)
+        if perform_go_functions(self.settings):
+            # We may be able to find a better frame start and symbol name by examining PCLNTAB.
+            function_start, function_name = go_improve_function(pc, function_start, function_name)
+
+        output_line(f"{filename}'{function_name}:")
+
+        pre_instructions = extract_instructions(self.target, function_start, pc - 1, self.state.disassembly_syntax)[-3:]
         print_instructions(
             self.target,
-            pre_instructions[-3:],
+            pre_instructions,
             frame_start_address,
+            function_start,
+            self.settings,
             self.color_settings,
         )
+
+        num_post = self.settings.max_disassembly_length - len(pre_instructions)
+
+        # optimisation: only disassemble as far as we could possibly display
+        frame_end_address = min(frame_end_address, pc + num_post * self.arch().max_instr_size + 1)
 
         post_instructions = extract_instructions(self.target, pc, frame_end_address, self.state.disassembly_syntax)
 
@@ -337,15 +378,18 @@ class ContextHandler:
                 self.target,
                 pc_instruction,
                 frame_start_address,
+                function_start,
+                self.settings,
                 self.color_settings,
                 True,
             )
 
-            limit = 9 - min(len(pre_instructions), 3)
             print_instructions(
                 self.target,
-                post_instructions[1:limit],
+                post_instructions[1:num_post],
                 frame_start_address,
+                function_start,
+                self.settings,
                 self.color_settings,
             )
 
@@ -357,7 +401,36 @@ class ContextHandler:
             string_color=self.color_settings.section_header_color,
         )
         for thread in self.process:
-            output_line(thread)
+            # This is roughly equivalent to str(thread). We manually generate it in order to patch fields if needed.
+
+            if not thread.IsValid():
+                continue
+
+            frame = thread.GetFrameAtIndex(0)
+            if frame is None or not frame.IsValid():  # can happen if the user holds down step
+                continue
+
+            func_name, func_off = get_funcinfo_from_frame(self.settings, self.target, frame)
+
+            base_name = ""
+            module = frame.GetModule()
+            if module is not None and module.IsValid():
+                file = module.GetFileSpec()
+                if file is not None and file.IsValid():
+                    base_name = file.GetFilename()
+
+            line = (
+                f"thread #{thread.idx}: tid = {thread.id}, {hex_or_str(frame.pc)} "
+                f"{base_name}`{func_name} + {func_off}"
+            )
+            if thread.name:
+                line += f""", name = {color_string("'" + thread.name + "'", "GREEN")}"""
+            if thread.queue:
+                line += f""", queue = {color_string("'" + thread.queue + "'", "GREEN")}"""
+            stop_reason = thread.GetStopDescription(64)
+            if stop_reason:
+                line += f""", stop reason = {color_string(stop_reason, "RED")}"""
+            output_line(line)
 
     def display_trace(self) -> None:
         """
@@ -368,8 +441,15 @@ class ContextHandler:
             line_color=self.color_settings.line_color,
             string_color=self.color_settings.section_header_color,
         )
+        length = self.settings.max_trace_length
 
-        for i in range(self.thread.GetNumFrames()):
+        if perform_go_functions(self.settings):
+            go_bt = go_improve_backtrace(self.process, self.frame, self.arch, self.color_settings, length)
+            if go_bt is not None:
+                output_line(go_bt)
+                return
+
+        for i in range(min(self.thread.GetNumFrames(), length)):
             if i == 0:
                 number_color = self.color_settings.highlighted_index_color
             else:
@@ -378,19 +458,17 @@ class ContextHandler:
 
             current_frame = self.thread.GetFrameAtIndex(i)
             pc_address = current_frame.GetPCAddress()
-            func = current_frame.GetFunction()
             trace_address = pc_address.GetLoadAddress(self.target)
 
-            if func:
-                line += (
-                    f"{trace_address:#x}{self.generate_rebased_address_string(pc_address)}  {GLYPHS.RIGHT_ARROW.value} "
-                    f"{color_string(func.GetName(), self.color_settings.function_name_color)}"
-                )
-            else:
-                line += (
-                    f"{trace_address:#x}{self.generate_rebased_address_string(pc_address)}  {GLYPHS.RIGHT_ARROW.value} "
-                    f"{color_string(current_frame.GetSymbol().GetName(), self.color_settings.function_name_color)}"
-                )
+            name, _ = get_funcinfo_from_frame(self.settings, self.target, current_frame)
+            rebased = generate_rebased_address_string(
+                pc_address,
+                self.settings.rebase_addresses,
+                self.settings.rebase_offset,
+                self.color_settings.rebased_address_color,
+            )
+            line += f"{trace_address:#x}{rebased}  {GLYPHS.RIGHT_ARROW.value} "
+            line += f"{color_string(name, self.color_settings.function_name_color)}"
 
             line += get_frame_arguments(
                 current_frame, frame_argument_name_color=TERM_COLORS[self.color_settings.frame_argument_name_color]
@@ -441,6 +519,8 @@ class ContextHandler:
                 # Setting darwin_heap_regions to None will cause the fallback heap
                 # scanning method to be used.
                 self.darwin_heap_regions = None
+
+        go_stop_hook(exe_ctx, self.arch(), self.settings)
 
     def display_context(self, exe_ctx: SBExecutionContext, update_registers: bool) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""

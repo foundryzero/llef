@@ -1,15 +1,29 @@
 """Utility functions related to terminal output."""
 
+import os
 import re
 import shutil
 from textwrap import TextWrapper
-from typing import Any
+from typing import Any, Union
+
+from lldb import SBAddress
 
 from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, DEFAULT_TERMINAL_LINES, GLYPHS, MSG_TYPE, TERM_COLORS
 from common.state import LLEFState
 
 
-def color_string(string: str, color_setting: str | None, lwrap: str = "", rwrap: str = "") -> str:
+def generate_rebased_address_string(address: SBAddress, rebase_addresses: bool, rebase_offset: int, col: str) -> str:
+    module = address.GetModule()
+
+    if module is not None and rebase_addresses is True:
+        file_name = os.path.basename(str(module.file))
+        rebased_address = address.GetFileAddress() + rebase_offset
+        return color_string(f"({file_name} {rebased_address:#x})", col)
+
+    return ""
+
+
+def color_string(string: str, color_setting: Union[str, None], lwrap: str = "", rwrap: str = "") -> str:
     """
     Colors a @string based on the @color_setting.
     Optional: Wrap the string with uncolored strings @lwrap and @rwrap.

@@ -10,6 +10,8 @@ class I386(BaseArch):
 
     bits = 32
 
+    max_instr_size = 15
+
     gpr_registers = [
         "eax",
         "ebx",

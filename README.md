@@ -74,6 +74,11 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 | rebase_offset           | Int     | Set the rebase offset (default 0x100000)           |
 | show_all_registers      | Boolean | Enable/disable extended register output            |
 | enable_darwin_heap_scan | Boolean | Enable/disable more accurate heap scanning for Darwin-based platforms. Uses the Darwin malloc introspection API, executing code in the address space of the target application using LLDB's evaluation engine. |
+| max_trace_length        | Int     | Set the maximum length of the call stack backtrace to display                                        |
+| stack_view_size         | Int     | Set the number of entries in the stack read to display                                               |
+| max_disassembly_length  | Int     | Set the maximum number of instructions to disassemble and display around the current PC              |
+| go_support_level        | String  | Control Golang-specific analysis. `disable` / `auto` (default) / `force`. Go support in Windows binaries requires `force`. |
+| go_confidence_threshold | String  | Set the confidence threshold (`low` / `medium` / `high`) for Go objects to be shown in the context view. |
 
 #### llefcolorsettings
 Allows setting LLEF GUI colors:
@@ -179,6 +184,36 @@ aabacadaea
 [+] Found in $8 at index 0 (little endian)
 ```
 
+#### (Go) Unpack Type
+
+```
+(lldb) go unpack-type 0xc000130000 []main.Country
+[{Name:'Japan' Capital:'Tokyo' Continent:'Asia'} {Name:'Germany' Capital:'Berlin' Continent:'Europe'}]
+(lldb) go unpack-type 0xc000130000 []main.Country --depth 1
+[0xc000142000.. 0xc000142030..]
+(lldb) go unpack-type 0xc000142000 main.Country
+{Name:'Japan' Capital:'Tokyo' Continent:'Asia'}
+(lldb) go unpack-type 0xc000142000 [6]uintptr
+[0xc000114140 0x5 0xc000114145 0x5 0xc00011414c 0x4]
+```
+
+#### (Go) Find Function
+```
+(lldb) go find-func main.main
+0x55c6894c0280 - main.main (file address = 0x4c0280)
+(lldb) go find-func 0x55c689454a3a
+0x55c689454a20 - runtime.(*moduledata).textAddr (file address = 0x454a20)
+```
+
+#### (Go) Get Type
+```
+(lldb) go get-type json.mapEncoder --depth 3
+json.mapEncoder = struct { elemEnc func(*json.encodeState, struct { typ_ *abi.Type; ptr unsafe.Pointer; flag uintptr }, struct { quoted bool; escapeHTML bool }) }
+Size in bytes: 0x8
+(lldb) go get-type json.encodeState --depth 1
+json.encodeState = struct { Buffer bytes.Buffer; ptrLevel uint; ptrSeen map[interface {}]struct {} }
+Size in bytes: 0x38
+```
 
 ### Breakpoint hook
 This is automatic and prints all the currently implemented information at a break point.

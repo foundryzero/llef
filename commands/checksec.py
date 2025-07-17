@@ -1,7 +1,7 @@
 """Checksec command class."""
 
 import argparse
-from typing import Any, Dict
+from typing import Any, Union
 
 from lldb import SBCommandReturnObject, SBDebugger, SBError, SBExecutionContext, SBTarget
 
@@ -39,9 +39,9 @@ class ChecksecCommand(BaseCommand):
 
     program: str = "checksec"
     container = None
-    context_handler: ContextHandler | None = None
+    context_handler: Union[ContextHandler, None] = None
 
-    def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
@@ -71,7 +71,7 @@ class ChecksecCommand(BaseCommand):
         """
         return read_program_int(target, 0x10, 2)
 
-    def get_program_header_permission(self, target: SBTarget, target_header_type: int) -> int | None:
+    def get_program_header_permission(self, target: SBTarget, target_header_type: int) -> Union[int, None]:
         """
         Get value of the permission field from a program header entry.
 
@@ -103,7 +103,7 @@ class ChecksecCommand(BaseCommand):
 
         return permission
 
-    def get_dynamic_entry(self, target: SBTarget, target_entry_type: int) -> int | None:
+    def get_dynamic_entry(self, target: SBTarget, target_entry_type: int) -> Union[int, None]:
         """
         Get value for a given entry type in the .dynamic section table.
 
@@ -126,7 +126,7 @@ class ChecksecCommand(BaseCommand):
 
         return target_entry_value
 
-    def check_security(self, target: SBTarget) -> Dict[SECURITY_FEATURE, SECURITY_CHECK]:
+    def check_security(self, target: SBTarget) -> dict[SECURITY_FEATURE, SECURITY_CHECK]:
         """
         Checks the following security features on the target executable:
          - Stack Canary

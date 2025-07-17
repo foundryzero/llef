@@ -11,7 +11,7 @@
 # ---------------------------------------------------------------------
 
 import platform
-from typing import Any, Dict, List, Type, Union
+from typing import Any, Union
 
 from lldb import SBDebugger
 
@@ -21,6 +21,14 @@ from commands.checksec import ChecksecCommand
 from commands.color_settings import ColorSettingsCommand
 from commands.context import ContextCommand
 from commands.dereference import DereferenceCommand
+from commands.golang import (
+    GolangBacktraceCommand,
+    GolangContainer,
+    GolangFindFuncCommand,
+    GolangGetTypeCommand,
+    GolangReanalyseCommand,
+    GolangUnpackTypeCommand,
+)
 from commands.hexdump import HexdumpCommand
 from commands.pattern import PatternContainer, PatternCreateCommand, PatternSearchCommand
 from commands.scan import ScanCommand
@@ -30,8 +38,8 @@ from common.state import LLEFState
 from handlers.stop_hook import StopHookHandler
 
 
-def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
-    commands: List[Union[Type[BaseCommand], Type[BaseContainer]]] = [
+def __lldb_init_module(debugger: SBDebugger, _: dict[Any, Any]) -> None:
+    commands: list[Union[type[BaseCommand], type[BaseContainer]]] = [
         PatternContainer,
         PatternCreateCommand,
         PatternSearchCommand,
@@ -43,6 +51,12 @@ def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
         XinfoCommand,
         DereferenceCommand,
         ScanCommand,
+        GolangContainer,
+        GolangBacktraceCommand,
+        GolangFindFuncCommand,
+        GolangGetTypeCommand,
+        GolangUnpackTypeCommand,
+        GolangReanalyseCommand,
     ]
 
     handlers = [StopHookHandler]

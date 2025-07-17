@@ -1,7 +1,7 @@
 """De Bruijn sequence utilities."""
 
 import itertools
-from typing import Iterator
+from collections.abc import Iterator
 
 
 def de_bruijn(alphabet: bytearray, n: int) -> Iterator[int]:
