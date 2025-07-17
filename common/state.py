@@ -1,7 +1,8 @@
 """Global state module"""
 
-from typing import Any, Dict
+from typing import Any
 
+from common.golang.state import GoState
 from common.singleton import Singleton
 
 
@@ -11,10 +12,10 @@ class LLEFState(metaclass=Singleton):
     """
 
     # Stores previous register state at the last breakpoint
-    prev_registers: Dict[str, int] = {}
+    prev_registers: dict[str, int] = {}
 
     # Stores register state at the current breakpoint (caches the contents of the current frame as frame is mutable)
-    current_registers: Dict[str, int] = {}
+    current_registers: dict[str, int] = {}
 
     # Stores patterns created by the `pattern` command
     created_patterns: list[dict[str, Any]] = []
@@ -32,6 +33,9 @@ class LLEFState(metaclass=Singleton):
     platform = ""
 
     disassembly_syntax = ""
+
+    # Stores Go-specific analysis. None means we are yet to analyse.
+    go_state = GoState()
 
     def change_use_color(self, new_value: bool) -> None:
         """

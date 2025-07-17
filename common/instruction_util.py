@@ -1,15 +1,18 @@
 import re
-from typing import List, Match
+from re import Match
 
 from lldb import SBAddress, SBInstruction, SBTarget
 
 from common.color_settings import LLEFColorSettings
+from common.golang.improvements import go_improve_instruction_comment
+from common.golang.util import perform_go_functions
 from common.output_util import color_string, output_line
+from common.settings import LLEFSettings
 
 
 def extract_instructions(
     target: SBTarget, start_address: int, end_address: int, disassembly_flavour: str
-) -> List[SBInstruction]:
+) -> list[SBInstruction]:
     """
     Returns a list of instructions between a range of memory address defined by @start_address and @end_address.
 
@@ -67,7 +70,9 @@ def color_operands(
 def print_instruction(
     target: SBTarget,
     instruction: SBInstruction,
-    base: int,
+    lldb_frame_start: int,
+    function_start: int,
+    settings: LLEFSettings,
     color_settings: LLEFColorSettings,
     highlight: bool = False,
 ) -> None:
@@ -82,7 +87,7 @@ def print_instruction(
     """
 
     address = instruction.GetAddress().GetLoadAddress(target)
-    offset = address - base
+    offset = address - function_start
 
     line = hex(address)
     if offset >= 0:
@@ -95,6 +100,9 @@ def print_instruction(
     comment = instruction.GetComment(target) or ""
 
     ops_width = len(operands)  # visible length, for spacing (before colouring)
+    if perform_go_functions(settings):
+        comment = go_improve_instruction_comment(target, instruction, lldb_frame_start, comment)
+
     if not highlight:
         operands = color_operands(operands, color_settings)
 
@@ -110,8 +118,10 @@ def print_instruction(
 
 def print_instructions(
     target: SBTarget,
-    instructions: List[SBInstruction],
-    base: int,
+    instructions: list[SBInstruction],
+    lldb_frame_start: int,
+    function_start: int,
+    settings: LLEFSettings,
     color_settings: LLEFColorSettings,
 ) -> None:
     """
@@ -123,4 +133,4 @@ def print_instructions(
     :param color_settings: Contains the color settings to color the instruction.
     """
     for instruction in instructions:
-        print_instruction(target, instruction, base, color_settings)
+        print_instruction(target, instruction, lldb_frame_start, function_start, settings, color_settings)

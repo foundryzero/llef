@@ -2,7 +2,7 @@
 
 import argparse
 import shlex
-from typing import Any, Dict
+from typing import Any, Union
 
 from lldb import (
     SBAddress,
@@ -30,9 +30,9 @@ class DereferenceCommand(BaseCommand):
 
     program: str = "dereference"
     container = None
-    context_handler: ContextHandler | None = None
+    context_handler: Union[ContextHandler, None] = None
 
-    def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
@@ -87,7 +87,11 @@ class DereferenceCommand(BaseCommand):
         return instruction_list.GetInstructionAtIndex(0)
 
     def dereference_last_address(
-        self, data: list[int | str], target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList | None
+        self,
+        data: list[Union[int, str]],
+        target: SBTarget,
+        process: SBProcess,
+        regions: Union[SBMemoryRegionInfoList, None],
     ) -> None:
         """
         Memory data at the last address (second to last in @data list) is
@@ -115,8 +119,8 @@ class DereferenceCommand(BaseCommand):
                 data[-1] = color_string(string, self.color_settings.string_color)
 
     def dereference(
-        self, address: int, target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList | None
-    ) -> list[int | str]:
+        self, address: int, target: SBTarget, process: SBProcess, regions: Union[SBMemoryRegionInfoList, None]
+    ) -> list[Union[int, str]]:
         """
         Dereference a memory @address until it reaches data that cannot be resolved to an address.
         Memory data at the last address is either disassembled to an instruction or converted to a string or neither.
@@ -129,7 +133,7 @@ class DereferenceCommand(BaseCommand):
         :param regions: List of memory regions of the process.
         """
 
-        data: list[int | str] = []
+        data: list[Union[int, str]] = []
 
         error = SBError()
         while error.Success():
@@ -146,7 +150,7 @@ class DereferenceCommand(BaseCommand):
 
         return data
 
-    def print_dereference_result(self, result: list[int | str], offset: int) -> None:
+    def print_dereference_result(self, result: list[Union[int, str]], offset: int) -> None:
         """Format and output the results of dereferencing an address."""
         output = color_string(hex_or_str(result[0]), TERM_COLORS.CYAN.name, rwrap=GLYPHS.VERTICAL_LINE.value)
         if offset >= 0:

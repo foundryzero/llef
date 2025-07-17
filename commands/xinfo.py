@@ -3,7 +3,7 @@
 import argparse
 import os
 import shlex
-from typing import Any, Dict
+from typing import Any, Union
 
 from lldb import (
     SBCommandReturnObject,
@@ -31,7 +31,7 @@ class XinfoCommand(BaseCommand):
     container = None
     context_handler = None
 
-    def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
@@ -58,7 +58,7 @@ class XinfoCommand(BaseCommand):
         """Return a longer help message"""
         return XinfoCommand.get_command_parser().format_help()
 
-    def get_xinfo(self, process: SBProcess, target: SBTarget, address: int) -> Dict[XINFO, Any] | None:
+    def get_xinfo(self, process: SBProcess, target: SBTarget, address: int) -> Union[dict[XINFO, Any], None]:
         """
         Gets memory region information for a given `address`, including:
         - `region_start` address

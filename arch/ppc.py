@@ -10,6 +10,8 @@ class PPC(BaseArch):
 
     bits = 32
 
+    max_instr_size = 4
+
     gpr_registers = [
         "r0",
         "r1",

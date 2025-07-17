@@ -10,6 +10,8 @@ class X86_64(BaseArch):
 
     bits = 64
 
+    max_instr_size = 15
+
     gpr_registers = [
         "rax",
         "rbx",

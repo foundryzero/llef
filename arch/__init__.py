@@ -1,7 +1,5 @@
 """Arch module __init__.py"""
 
-from typing import Type
-
 from lldb import SBTarget
 
 from arch.aarch64 import Aarch64
@@ -12,7 +10,12 @@ from arch.ppc import PPC
 from arch.x86_64 import X86_64
 from common.constants import MSG_TYPE
 from common.output_util import print_message
-from common.util import extract_arch_from_triple
+
+
+def extract_arch_from_triple(triple: str) -> str:
+    """Extracts the architecture from triple string."""
+    return triple.split("-")[0]
+
 
 # macOS devices running arm chips identify as arm64.
 # aarch64 and arm64 backends have been merged, so alias arm64 to aarch64.
@@ -29,13 +32,13 @@ supported_arch = {
 }
 
 
-def get_arch(target: SBTarget) -> Type[BaseArch]:
+def get_arch(target: SBTarget) -> type[BaseArch]:
     """Get the architecture of a given target"""
     arch = extract_arch_from_triple(target.triple)
     return get_arch_from_str(arch)
 
 
-def get_arch_from_str(arch: str) -> Type[BaseArch]:
+def get_arch_from_str(arch: str) -> type[BaseArch]:
     """Get the architecture class from string"""
     if arch in supported_arch:
         return supported_arch[arch]

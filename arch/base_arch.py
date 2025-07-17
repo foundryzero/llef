@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List
 
 
 @dataclass
@@ -10,7 +9,7 @@ class FlagRegister:
     """FlagRegister dataclass to store register name / bitmask associations"""
 
     name: str
-    bit_masks: Dict[str, int]
+    bit_masks: dict[str, int]
 
 
 class BaseArch(ABC):
@@ -23,7 +22,12 @@ class BaseArch(ABC):
 
     @property
     @abstractmethod
-    def gpr_registers(self) -> List[str]:
+    def max_instr_size(self) -> int:
+        """Max instruction size (bytes) property"""
+
+    @property
+    @abstractmethod
+    def gpr_registers(self) -> list[str]:
         """GPR register property"""
 
     @property
@@ -33,5 +37,5 @@ class BaseArch(ABC):
 
     @property
     @abstractmethod
-    def flag_registers(self) -> List[FlagRegister]:
+    def flag_registers(self) -> list[FlagRegister]:
         """List of flag registers with associated bit masks"""

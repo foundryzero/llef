@@ -1,7 +1,7 @@
 """llefsettings command class."""
 
 import argparse
-from typing import Any, Dict
+from typing import Any
 
 from lldb import SBDebugger
 
@@ -15,7 +15,7 @@ class SettingsCommand(BaseSettingsCommand):
     program: str = "llefsettings"
     container = None
 
-    def __init__(self, debugger: SBDebugger, dictionary: Dict[Any, Any]) -> None:
+    def __init__(self, debugger: SBDebugger, dictionary: dict[Any, Any]) -> None:
         super().__init__(debugger, dictionary)
         self.settings = LLEFSettings(debugger)
 

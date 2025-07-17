@@ -2,7 +2,7 @@
 
 import argparse
 import shlex
-from typing import Any, Dict, List, Tuple
+from typing import Any, Union
 
 from lldb import (
     SBCommandReturnObject,
@@ -28,9 +28,9 @@ class ScanCommand(BaseCommand):
 
     program: str = "scan"
     container = None
-    context_handler: ContextHandler | None = None
+    context_handler: Union[ContextHandler, None] = None
 
-    def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
@@ -62,7 +62,7 @@ class ScanCommand(BaseCommand):
         """Return a longer help message"""
         return ScanCommand.get_command_parser().format_help()
 
-    def parse_address_ranges(self, process: SBProcess, region_name: str) -> List[Tuple[int, int]]:
+    def parse_address_ranges(self, process: SBProcess, region_name: str) -> list[tuple[int, int]]:
         """
         Parse a custom address range (e.g., 0x7fffffffe208-0x7fffffffe240)
         or extract address ranges from memory regions with a given name (e.g., libc).
@@ -87,7 +87,7 @@ class ScanCommand(BaseCommand):
 
         return address_ranges
 
-    def find_address_ranges(self, process: SBProcess, region_name: str) -> List[Tuple[int, int]]:
+    def find_address_ranges(self, process: SBProcess, region_name: str) -> list[tuple[int, int]]:
         """
         Extract address ranges from memory regions with @region_name.
 
@@ -116,12 +116,12 @@ class ScanCommand(BaseCommand):
 
     def scan(
         self,
-        search_address_ranges: List[Tuple[int, int]],
-        target_address_ranges: List[Tuple[int, int]],
+        search_address_ranges: list[tuple[int, int]],
+        target_address_ranges: list[tuple[int, int]],
         address_size: int,
         process: SBProcess,
         target: SBTarget,
-    ) -> List[Tuple[SBValue, int]]:
+    ) -> list[tuple[SBValue, int]]:
         """
         Scan through a given search space in memory for addresses that point towards a target memory space.
 
@@ -183,4 +183,4 @@ class ScanCommand(BaseCommand):
 
         results = self.scan(search_address_ranges, target_address_ranges, address_size, exe_ctx.process, exe_ctx.target)
         for address, offset in results:
-            self.context_handler.print_stack_addr(address, offset)
+            self.context_handler.print_stack_addr(address.GetValueAsUnsigned(), offset)

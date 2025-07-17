@@ -63,7 +63,7 @@ class BaseLLEFSettings(metaclass=Singleton):
             self.load_default_settings()
             output_line("Error parsing config. Default settings loaded.")
 
-    def list(self) -> None:
+    def list_settings(self) -> None:
         """
         List all settings and their current values
         """

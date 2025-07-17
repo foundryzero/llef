@@ -1,7 +1,7 @@
 """Base command definition."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Type
+from typing import Any, Union
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
@@ -19,7 +19,7 @@ class BaseCommand(ABC):
 
     @property
     @abstractmethod
-    def container(self) -> Type[BaseContainer] | None:
+    def container(self) -> Union[type[BaseContainer], None]:
         """Container property."""
 
     @property

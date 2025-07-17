@@ -4,7 +4,7 @@ import argparse
 import binascii
 import os
 import shlex
-from typing import Any, Dict, Type
+from typing import Any
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
@@ -38,7 +38,7 @@ class PatternCreateCommand(BaseCommand):
     """Implements the 'create' subcommand"""
 
     program: str = "create"
-    container: Type[BaseContainer] = PatternContainer
+    container: type[BaseContainer] = PatternContainer
     state: LLEFState
 
     @classmethod
@@ -66,7 +66,7 @@ class PatternCreateCommand(BaseCommand):
             + PatternCreateCommand.get_command_parser().format_help()
         )
 
-    def __init__(self, _: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, _: SBDebugger, __: dict[Any, Any]) -> None:
         """Class initializer."""
         self.parser = self.get_command_parser()
         self.state = LLEFState()
@@ -112,7 +112,7 @@ class PatternSearchCommand(BaseCommand):
     """Implements the 'search' subcommand."""
 
     program = "search"
-    container: Type[BaseContainer] = PatternContainer
+    container: type[BaseContainer] = PatternContainer
     state: LLEFState
 
     @classmethod
@@ -134,7 +134,7 @@ class PatternSearchCommand(BaseCommand):
             + PatternCreateCommand.get_command_parser().format_help()
         )
 
-    def __init__(self, _: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, _: SBDebugger, __: dict[Any, Any]) -> None:
         """Class initializer."""
         self.parser = self.get_command_parser()
         self.state = LLEFState()

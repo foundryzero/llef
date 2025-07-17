@@ -2,7 +2,7 @@
 
 import argparse
 import shlex
-from typing import Any, Dict
+from typing import Any, Union
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
@@ -17,13 +17,13 @@ class HexdumpCommand(BaseCommand):
 
     program: str = "hexdump"
     container = None
-    context_handler: ContextHandler | None = None
+    context_handler: Union[ContextHandler, None] = None
 
     # Define alias set, where each entry is an alias with any arguments the command should take.
     # For example, 'dq' maps to 'hexdump qword'.
     alias_set = {"dq": "qword", "dd": "dword", "dw": "word", "db": "byte"}
 
-    def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
+    def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
