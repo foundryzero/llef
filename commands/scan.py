@@ -4,7 +4,16 @@ import argparse
 import shlex
 from typing import Any, Dict, List, Tuple
 
-from lldb import SBCommandReturnObject, SBDebugger, SBError, SBExecutionContext, SBMemoryRegionInfo, SBProcess, SBTarget
+from lldb import (
+    SBCommandReturnObject,
+    SBDebugger,
+    SBError,
+    SBExecutionContext,
+    SBMemoryRegionInfo,
+    SBProcess,
+    SBTarget,
+    SBValue,
+)
 
 from commands.base_command import BaseCommand
 from common.constants import MSG_TYPE
@@ -19,7 +28,7 @@ class ScanCommand(BaseCommand):
 
     program: str = "scan"
     container = None
-    context_handler = None
+    context_handler: ContextHandler | None = None
 
     def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
         super().__init__()
@@ -112,7 +121,7 @@ class ScanCommand(BaseCommand):
         address_size: int,
         process: SBProcess,
         target: SBTarget,
-    ) -> List[Tuple[int, int]]:
+    ) -> List[Tuple[SBValue, int]]:
         """
         Scan through a given search space in memory for addresses that point towards a target memory space.
 
@@ -152,6 +161,9 @@ class ScanCommand(BaseCommand):
         args = self.parser.parse_args(shlex.split(command))
         search_region = args.search_region
         target_region = args.target_region
+
+        if self.context_handler is None:
+            raise AttributeError("Class not properly initialised: self.context_handler is None")
 
         self.context_handler.refresh(exe_ctx)
 

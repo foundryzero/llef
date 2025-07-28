@@ -58,7 +58,7 @@ class XinfoCommand(BaseCommand):
         """Return a longer help message"""
         return XinfoCommand.get_command_parser().format_help()
 
-    def get_xinfo(self, process: SBProcess, target: SBTarget, address: int) -> Dict[str, Any]:
+    def get_xinfo(self, process: SBProcess, target: SBTarget, address: int) -> Dict[XINFO, Any] | None:
         """
         Gets memory region information for a given `address`, including:
         - `region_start` address
@@ -81,7 +81,7 @@ class XinfoCommand(BaseCommand):
         if error.Fail() or not memory_region.IsMapped():
             return None
 
-        xinfo = {
+        xinfo: dict[XINFO, Any] = {
             XINFO.REGION_START: None,
             XINFO.REGION_END: None,
             XINFO.REGION_SIZE: None,
@@ -132,7 +132,7 @@ class XinfoCommand(BaseCommand):
         args = self.parser.parse_args(shlex.split(command))
         address = args.address
 
-        if address < 0 or address > 2 ** get_arch(exe_ctx.target).bits:
+        if address < 0 or address > 2 ** get_arch(exe_ctx.target)().bits:
             print_message(MSG_TYPE.ERROR, "Invalid address.")
             return
 

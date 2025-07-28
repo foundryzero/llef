@@ -8,6 +8,7 @@ from typing import Any, Dict
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_command import BaseCommand
+from common.base_settings import BaseLLEFSettings
 from common.output_util import output_line
 
 
@@ -16,7 +17,7 @@ class BaseSettingsCommand(BaseCommand, ABC):
 
     program: str = ""
     container = None
-    settings = None
+    settings: BaseLLEFSettings | None = None
 
     def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
         super().__init__()
@@ -50,6 +51,9 @@ class BaseSettingsCommand(BaseCommand, ABC):
         if not hasattr(args, "action"):
             output_line(self.__class__.get_long_help())
             return
+
+        if self.settings is None:
+            raise AttributeError("Class not properly initialised: self.settings is None")
 
         if args.action == "list":
             self.settings.list()

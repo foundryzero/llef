@@ -3,7 +3,7 @@
 import os
 import shutil
 from argparse import ArgumentTypeError
-from typing import List, Tuple
+from typing import Any, Callable, List, Tuple
 
 from lldb import (
     SBAddress,
@@ -46,7 +46,7 @@ def address_to_filename(target: SBTarget, address: int) -> str:
     return filename
 
 
-def get_frame_range(frame: SBFrame, target: SBTarget) -> Tuple[str, str]:
+def get_frame_range(frame: SBFrame, target: SBTarget) -> Tuple[int, int]:
     function = frame.GetFunction()
     if function:
         start_address = function.GetStartAddress().GetLoadAddress(target)
@@ -79,20 +79,20 @@ def get_frame_arguments(frame: SBFrame, frame_argument_name_color: TERM_COLORS) 
     args = []
     for var in variables:
         # get and format argument value
-        value = "???"
+        val = "???"
         var_value = var.GetValue()
         if var_value is None:
-            value = "null"
+            val = "null"
         elif var_value:
             try:
-                value = f"{int(var.GetValue(), 0):#x}"
+                val = f"{int(var.GetValue(), 0):#x}"
             except ValueError:
                 pass
-        args.append(f"{frame_argument_name_color.value}{var.GetName()}{TERM_COLORS.ENDC.value}={value}")
+        args.append(f"{frame_argument_name_color.value}{var.GetName()}{TERM_COLORS.ENDC.value}={val}")
     return f"({' '.join(args)})"
 
 
-def attempt_to_read_string_from_memory(process: SBProcess, addr: SBValue, buffer_size: int = 256) -> str:
+def attempt_to_read_string_from_memory(process: SBProcess, addr: int, buffer_size: int = 256) -> str:
     """
     Returns a string from a memory address if one can be read, else an empty string
     """
@@ -108,7 +108,7 @@ def attempt_to_read_string_from_memory(process: SBProcess, addr: SBValue, buffer
     return ret_string
 
 
-def is_ascii_string(address: SBValue, process: SBProcess) -> bool:
+def is_ascii_string(address: int, process: SBProcess) -> bool:
     """
     Determines if a given memory @address contains a readable string.
 
@@ -119,7 +119,7 @@ def is_ascii_string(address: SBValue, process: SBProcess) -> bool:
     return attempt_to_read_string_from_memory(process, address) != ""
 
 
-def is_in_section(address: SBValue, target: SBTarget, target_section_name: str) -> bool:
+def is_in_section(address: int, target: SBTarget, target_section_name: str) -> bool:
     """
     Determines whether a given memory @address exists within a @section of the executable file @target.
 
@@ -141,7 +141,7 @@ def is_in_section(address: SBValue, target: SBTarget, target_section_name: str) 
     return target_section_name in full_section_name
 
 
-def is_text_region(address: SBValue, target: SBTarget, region: SBMemoryRegionInfo) -> bool:
+def is_text_region(address: int, target: SBTarget, region: SBMemoryRegionInfo) -> bool:
     """
     Determines if a given memory @address if within a '.text' section of the target executable.
 
@@ -165,7 +165,7 @@ def is_text_region(address: SBValue, target: SBTarget, region: SBMemoryRegionInf
     return in_text
 
 
-def is_code(address: SBValue, process: SBProcess, target: SBTarget, regions: SBMemoryRegionInfoList) -> bool:
+def is_code(address: int, process: SBProcess, target: SBTarget, regions: SBMemoryRegionInfoList | None) -> bool:
     """Determines whether an @address points to code"""
     region = SBMemoryRegionInfo()
     code_bool = False
@@ -176,7 +176,9 @@ def is_code(address: SBValue, process: SBProcess, target: SBTarget, regions: SBM
     return code_bool
 
 
-def is_stack(address: SBValue, regions: SBMemoryRegionInfoList, darwin_stack_regions: List[SBMemoryRegionInfo]) -> bool:
+def is_stack(
+    address: int, regions: SBMemoryRegionInfoList | None, darwin_stack_regions: List[SBMemoryRegionInfo]
+) -> bool:
     """Determines whether an @address points to the stack"""
 
     stack_bool = False
@@ -191,11 +193,11 @@ def is_stack(address: SBValue, regions: SBMemoryRegionInfoList, darwin_stack_reg
 
 
 def is_heap(
-    address: SBValue,
+    address: int,
     target: SBTarget,
-    regions: SBMemoryRegionInfoList,
+    regions: SBMemoryRegionInfoList | None,
     stack_regions: List[SBMemoryRegionInfo],
-    darwin_heap_regions: List[Tuple[int, int]],
+    darwin_heap_regions: List[Tuple[int, int]] | None,
 ) -> bool:
     """Determines whether an @address points to the heap"""
     heap_bool = False
@@ -234,7 +236,7 @@ def verify_version(version: List[int], target_version: List[int]) -> bool:
     return version >= target_version
 
 
-def lldb_version_to_clang(lldb_version):
+def lldb_version_to_clang(lldb_version: list[int]) -> list[int]:
     """
     Convert an LLDB version to its corresponding Clang version.
 
@@ -253,9 +255,9 @@ def lldb_version_to_clang(lldb_version):
     return clang_version
 
 
-def check_version(required_version_string):
-    def inner(func):
-        def wrapper(*args, **kwargs):
+def check_version(required_version_string: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def inner(func: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             required_version = [int(x) for x in required_version_string.split(".")]
             if LLEFState.platform == "Darwin":
                 required_version = lldb_version_to_clang(required_version)
@@ -269,7 +271,7 @@ def check_version(required_version_string):
     return inner
 
 
-def check_process(func):
+def check_process(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Checks that there's a running process before executing the wrapped function. Only to be used on
     overrides of `__call__`.
@@ -277,7 +279,7 @@ def check_process(func):
     :param func: Wrapped function to be executed after successful check.
     """
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         for arg in list(args) + list(kwargs.values()):
             if isinstance(arg, SBExecutionContext):
                 if arg.process.is_alive:
@@ -291,8 +293,8 @@ def check_process(func):
     return wrapper
 
 
-def check_target(func):
-    def wrapper(*args, **kwargs):
+def check_target(func: Callable[..., Any]) -> Callable[..., Any]:
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         for arg in list(args) + list(kwargs.values()):
             if isinstance(arg, SBExecutionContext):
                 if arg.target.IsValid():
@@ -306,14 +308,14 @@ def check_target(func):
     return wrapper
 
 
-def is_file(target: SBTarget, expected_magic_bytes: List[bytes]):
+def is_file(target: SBTarget, expected_magic_bytes: List[bytes]) -> bool:
     """Read signature of @target file and compare to expected magic bytes."""
     magic_bytes = read_program(target, 0, 4)
     return magic_bytes in expected_magic_bytes
 
 
-def check_elf(func):
-    def wrapper(*args, **kwargs):
+def check_elf(func: Callable[..., Any]) -> Callable[..., Any]:
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         for arg in list(args) + list(kwargs.values()):
             if isinstance(arg, SBExecutionContext):
                 try:
@@ -331,7 +333,7 @@ def check_elf(func):
     return wrapper
 
 
-def hex_int(x):
+def hex_int(x: str) -> int:
     """A converter for input arguments in different bases to ints.
     For base 0, the base is determined by the prefix. So, numbers starting `0x` are hex
     and numbers with no prefix are decimal. Base 0 also disallows leading zeros.
@@ -339,15 +341,15 @@ def hex_int(x):
     return int(x, 0)
 
 
-def positive_int(x):
+def positive_int(x: str) -> int:
     """A converter for input arguments in different bases to positive ints"""
-    x = hex_int(x)
-    if x <= 0:
+    int_x = hex_int(x)
+    if int_x <= 0:
         raise ArgumentTypeError("Must be positive")
-    return x
+    return int_x
 
 
-def hex_or_str(x):
+def hex_or_str(x: str | int) -> str:
     """Convert to formatted hex if an integer, otherwise return the value."""
     if isinstance(x, int):
         return f"0x{x:016x}"
@@ -355,7 +357,7 @@ def hex_or_str(x):
     return x
 
 
-def read_program(target: SBTarget, offset: int, n: int):
+def read_program(target: SBTarget, offset: int, n: int) -> bytes:
     """
     Read @n bytes from a given @offset from the start of @target object file.
 
@@ -372,13 +374,13 @@ def read_program(target: SBTarget, offset: int, n: int):
     address.OffsetAddress(offset)
     data = target.ReadMemory(address, n, error)
 
-    if error.Fail():
+    if error.Fail() or data is None:
         raise MemoryError(f"Couldn't read memory at file offset {hex(address.GetOffset())}.")
 
     return data
 
 
-def read_program_int(target: SBTarget, offset: int, n: int):
+def read_program_int(target: SBTarget, offset: int, n: int) -> int:
     """
     Read @n bytes from a given @offset from the start of @target object file,
     and convert to integer by little endian.
@@ -409,7 +411,7 @@ def find_stack_regions(process: SBProcess) -> List[SBMemoryRegionInfo]:
     return stack_regions
 
 
-def find_darwin_heap_regions(process: SBProcess) -> List[Tuple[int, int]]:
+def find_darwin_heap_regions(process: SBProcess) -> List[Tuple[int, int]] | None:
     """
     Find memory heap regions on Darwin.
 
@@ -453,6 +455,6 @@ def find_darwin_heap_regions(process: SBProcess) -> List[Tuple[int, int]]:
                 heap_regions.append((lo_addr, hi_addr))
     else:
         # Fallback to default way to calculate heap regions in error condition.
-        heap_regions = None
+        return None
 
     return heap_regions

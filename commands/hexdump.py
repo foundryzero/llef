@@ -17,7 +17,7 @@ class HexdumpCommand(BaseCommand):
 
     program: str = "hexdump"
     container = None
-    context_handler = None
+    context_handler: ContextHandler | None = None
 
     # Define alias set, where each entry is an alias with any arguments the command should take.
     # For example, 'dq' maps to 'hexdump qword'.
@@ -82,6 +82,9 @@ class HexdumpCommand(BaseCommand):
         divisions = SIZES[args.type.upper()].value
         address = args.address
         size = args.size
+
+        if self.context_handler is None:
+            raise AttributeError("Class not properly initialised: self.context_handler is None")
 
         self.context_handler.refresh(exe_ctx)
 

@@ -20,27 +20,27 @@ class BaseLLEFSettings(metaclass=Singleton):
     _RAW_CONFIG: configparser.ConfigParser = configparser.ConfigParser()
 
     @classmethod
-    def _get_setting_names(cls):
+    def _get_setting_names(cls) -> list[str]:
         return [name for name, value in vars(cls).items() if isinstance(value, property)]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.state = LLEFState()
         self.load()
 
     @abstractmethod
-    def validate_settings(self, setting=None) -> bool:
+    def validate_settings(self, setting: str = "") -> bool:
         """
         Validate settings
         """
 
-    def load_default_settings(self):
+    def load_default_settings(self) -> None:
         """
         Reset settings and use default values
         """
         self._RAW_CONFIG = configparser.ConfigParser()
         self._RAW_CONFIG.add_section(self.GLOBAL_SECTION)
 
-    def load(self, reset=False):
+    def load(self, reset: bool = False) -> None:
         """
         Load settings from file
         """
@@ -63,7 +63,7 @@ class BaseLLEFSettings(metaclass=Singleton):
             self.load_default_settings()
             output_line("Error parsing config. Default settings loaded.")
 
-    def list(self):
+    def list(self) -> None:
         """
         List all settings and their current values
         """
@@ -71,14 +71,14 @@ class BaseLLEFSettings(metaclass=Singleton):
         for setting_name in settings_names:
             output_line(f"{setting_name}={getattr(self, setting_name)}")
 
-    def save(self):
+    def save(self) -> None:
         """
         Save LLEF setting to file defined in `LLEF_CONFIG_PATH`
         """
         with open(self.LLEF_CONFIG_PATH, "w") as configfile:
             self._RAW_CONFIG.write(configfile)
 
-    def set(self, setting: str, value: str):
+    def set(self, setting: str, value: str) -> None:
         """
         Set a LLEF setting
         """

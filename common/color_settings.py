@@ -20,91 +20,91 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
     supported_colors: List[str] = []
 
     @property
-    def register_color(self):
+    def register_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "register_color", fallback="BLUE").upper()
 
     @property
-    def modified_register_color(self):
+    def modified_register_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "modified_register_color", fallback="RED").upper()
 
     @property
-    def code_color(self):
+    def code_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "code_color", fallback="RED").upper()
 
     @property
-    def heap_color(self):
+    def heap_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "heap_color", fallback="GREEN").upper()
 
     @property
-    def stack_color(self):
+    def stack_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "stack_color", fallback="PINK").upper()
 
     @property
-    def string_color(self):
+    def string_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "string_color", fallback="YELLOW").upper()
 
     @property
-    def stack_address_color(self):
+    def stack_address_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "stack_address_color", fallback="CYAN").upper()
 
     @property
-    def function_name_color(self):
+    def function_name_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "function_name_color", fallback="GREEN").upper()
 
     @property
-    def instruction_color(self):
+    def instruction_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "instruction_color", fallback="GREY").upper()
 
     @property
-    def highlighted_instruction_color(self):
+    def highlighted_instruction_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "highlighted_instruction_color", fallback="GREEN").upper()
 
     @property
-    def line_color(self):
+    def line_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "line_color", fallback="GREY").upper()
 
     @property
-    def rebased_address_color(self):
+    def rebased_address_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "rebased_address_color", fallback="GREY").upper()
 
     @property
-    def section_header_color(self):
+    def section_header_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "section_header_color", fallback="BLUE").upper()
 
     @property
-    def highlighted_index_color(self):
+    def highlighted_index_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "highlighted_index_color", fallback="GREEN").upper()
 
     @property
-    def index_color(self):
+    def index_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "index_color", fallback="PINK").upper()
 
     @property
-    def dereferenced_value_color(self):
+    def dereferenced_value_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "dereferenced_value_color", fallback="GREY").upper()
 
     @property
-    def dereferenced_register_color(self):
+    def dereferenced_register_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "dereferenced_register_color", fallback="BLUE").upper()
 
     @property
-    def frame_argument_name_color(self):
+    def frame_argument_name_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "frame_argument_name_color", fallback="YELLOW").upper()
 
     @property
-    def read_memory_address_color(self):
+    def read_memory_address_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "read_memory_address_color", fallback="CYAN").upper()
 
     @property
-    def address_operand_color(self):
+    def address_operand_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "address_operand_color", fallback="RED").upper()
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.supported_colors = [color.name for color in TERM_COLORS]
         self.supported_colors.remove(TERM_COLORS.ENDC.name)
         super().__init__()
 
-    def validate_settings(self, setting=None) -> bool:
+    def validate_settings(self, setting: str = "") -> bool:
         """
         Validate settings by attempting to retrieve all properties thus executing any ConfigParser coverters
         Check all colors are valid options
@@ -129,7 +129,7 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
                 output_line(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
         return valid
 
-    def list(self):
+    def list(self) -> None:
         """
         List all color settings and their current values, colored appropriately
         """

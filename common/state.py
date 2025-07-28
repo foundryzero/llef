@@ -1,6 +1,6 @@
 """Global state module"""
 
-from typing import Dict
+from typing import Any, Dict
 
 from common.singleton import Singleton
 
@@ -17,7 +17,7 @@ class LLEFState(metaclass=Singleton):
     current_registers: Dict[str, int] = {}
 
     # Stores patterns created by the `pattern` command
-    created_patterns = []
+    created_patterns: list[dict[str, Any]] = []
 
     # Stores whether color should be used
     use_color = False
@@ -26,7 +26,7 @@ class LLEFState(metaclass=Singleton):
     truncate_output = True
 
     # Stores version of LLDB if on Linux. Stores clang verion if on Mac
-    version = []
+    version: list[int] = []
 
     # Linux, Mac (Darwin) or Windows
     platform = ""

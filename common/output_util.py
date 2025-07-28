@@ -9,7 +9,7 @@ from common.constants import ALIGN, DEFAULT_TERMINAL_COLUMNS, DEFAULT_TERMINAL_L
 from common.state import LLEFState
 
 
-def color_string(string: str, color_setting: str, lwrap: str = "", rwrap: str = "") -> str:
+def color_string(string: str, color_setting: str | None, lwrap: str = "", rwrap: str = "") -> str:
     """
     Colors a @string based on the @color_setting.
     Optional: Wrap the string with uncolored strings @lwrap and @rwrap.

@@ -1,9 +1,10 @@
 """De Bruijn sequence utilities."""
 
 import itertools
+from typing import Iterator
 
 
-def de_bruijn(alphabet: str, n: int) -> str:
+def de_bruijn(alphabet: bytearray, n: int) -> Iterator[int]:
     """
     Generate De Bruijn sequence for alphabet and subsequences of length n (for compatibility. w/ pwnlib).
     Taken from GEF gef.py L3728 (2022.06).
@@ -12,7 +13,7 @@ def de_bruijn(alphabet: str, n: int) -> str:
     k = len(alphabet)
     a = [0] * k * n
 
-    def db(t, p):
+    def db(t: int, p: int) -> Iterator[int]:
         if t > n:
             if n % p == 0:
                 for j in range(1, p + 1):
