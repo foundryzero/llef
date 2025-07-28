@@ -2,7 +2,7 @@
 
 import argparse
 import shlex
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from lldb import (
     SBAddress,
@@ -30,7 +30,7 @@ class DereferenceCommand(BaseCommand):
 
     program: str = "dereference"
     container = None
-    context_handler = None
+    context_handler: ContextHandler | None = None
 
     def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
         super().__init__()
@@ -87,8 +87,8 @@ class DereferenceCommand(BaseCommand):
         return instruction_list.GetInstructionAtIndex(0)
 
     def dereference_last_address(
-        self, data: list, target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList
-    ):
+        self, data: list[int | str], target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList | None
+    ) -> None:
         """
         Memory data at the last address (second to last in @data list) is
         either disassembled to an instruction or converted to a string or neither.
@@ -99,6 +99,8 @@ class DereferenceCommand(BaseCommand):
         :param regions: List of memory regions of the process.
         """
         last_address = data[-2]
+        if isinstance(last_address, str):
+            return
 
         if is_code(last_address, process, target, regions):
             instruction = self.read_instruction(target, last_address)
@@ -112,7 +114,9 @@ class DereferenceCommand(BaseCommand):
             if string != "":
                 data[-1] = color_string(string, self.color_settings.string_color)
 
-    def dereference(self, address: int, target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList) -> List:
+    def dereference(
+        self, address: int, target: SBTarget, process: SBProcess, regions: SBMemoryRegionInfoList | None
+    ) -> list[int | str]:
         """
         Dereference a memory @address until it reaches data that cannot be resolved to an address.
         Memory data at the last address is either disassembled to an instruction or converted to a string or neither.
@@ -125,7 +129,7 @@ class DereferenceCommand(BaseCommand):
         :param regions: List of memory regions of the process.
         """
 
-        data = []
+        data: list[int | str] = []
 
         error = SBError()
         while error.Success():
@@ -142,7 +146,7 @@ class DereferenceCommand(BaseCommand):
 
         return data
 
-    def print_dereference_result(self, result: List, offset: int):
+    def print_dereference_result(self, result: list[int | str], offset: int) -> None:
         """Format and output the results of dereferencing an address."""
         output = color_string(hex_or_str(result[0]), TERM_COLORS.CYAN.name, rwrap=GLYPHS.VERTICAL_LINE.value)
         if offset >= 0:
@@ -171,6 +175,9 @@ class DereferenceCommand(BaseCommand):
         else:
             base = start_address
 
+        if self.context_handler is None:
+            raise AttributeError("Class not properly initialised: self.context_handler is None")
+
         self.context_handler.refresh(exe_ctx)
 
         address_size = exe_ctx.target.GetAddressByteSize()
@@ -178,5 +185,5 @@ class DereferenceCommand(BaseCommand):
         end_address = start_address + address_size * lines
         for address in range(start_address, end_address, address_size):
             offset = address - base
-            result = self.dereference(address, exe_ctx.target, exe_ctx.process, self.context_handler.regions)
-            self.print_dereference_result(result, offset)
+            deref_result = self.dereference(address, exe_ctx.target, exe_ctx.process, self.context_handler.regions)
+            self.print_dereference_result(deref_result, offset)

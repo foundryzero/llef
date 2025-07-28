@@ -1,7 +1,7 @@
 """Base command definition."""
 
 from abc import ABC, abstractmethod
-from typing import Type
+from typing import Any, Type
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
@@ -11,7 +11,7 @@ from commands.base_container import BaseContainer
 class BaseCommand(ABC):
     """An abstract base class for all commands."""
 
-    alias_set = {}
+    alias_set: dict[Any, Any] = {}
 
     @abstractmethod
     def __init__(self) -> None:
@@ -19,7 +19,7 @@ class BaseCommand(ABC):
 
     @property
     @abstractmethod
-    def container(self) -> Type[BaseContainer]:
+    def container(self) -> Type[BaseContainer] | None:
         """Container property."""
 
     @property

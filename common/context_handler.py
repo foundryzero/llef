@@ -10,6 +10,7 @@ from lldb import (
     SBExecutionContext,
     SBFrame,
     SBMemoryRegionInfo,
+    SBMemoryRegionInfoList,
     SBProcess,
     SBTarget,
     SBThread,
@@ -50,9 +51,10 @@ class ContextHandler:
     exe_ctx: SBExecutionContext
     settings: LLEFSettings
     color_settings: LLEFColorSettings
+    regions: SBMemoryRegionInfoList | None
     state: LLEFState
     darwin_stack_regions: List[SBMemoryRegionInfo]
-    darwin_heap_regions: List[Tuple[int, int]]
+    darwin_heap_regions: List[Tuple[int, int]] | None
 
     def __init__(
         self,
@@ -66,7 +68,7 @@ class ContextHandler:
         self.color_settings = LLEFColorSettings()
         self.state = LLEFState()
         self.state.change_use_color(self.settings.color_output)
-        self.darwin_stack_regions = None
+        self.darwin_stack_regions = []
         self.darwin_heap_regions = None
 
     def generate_rebased_address_string(self, address: SBAddress) -> str:
@@ -80,7 +82,7 @@ class ContextHandler:
         return ""
 
     def generate_printable_line_from_pointer(
-        self, pointer: SBValue, address_containing_pointer: Optional[int] = None
+        self, pointer: int, address_containing_pointer: Optional[int] = None
     ) -> str:
         """
         Generate a line from a memory address (@pointer) that contains relevant
@@ -155,7 +157,7 @@ class ContextHandler:
         err = SBError()
         memory_value = self.process.ReadMemory(addr, size, err)
 
-        if err.Success():
+        if err.Success() and memory_value is not None:
             line += f"0x{int.from_bytes(memory_value, 'little'):0{size * 2}x}"
         else:
             line += str(err)
@@ -170,8 +172,8 @@ class ContextHandler:
 
             # Add value to line
             err = SBError()
-            memory_value: bytes = self.process.ReadMemory(addr, size, err)
-            if err.Success():
+            memory_value = self.process.ReadMemory(addr, size, err)
+            if err.Success() and memory_value is not None:
                 line += f"{memory_value.hex(' '):47}    "
 
                 # Add characters to line
@@ -275,7 +277,7 @@ class ContextHandler:
             for reg_set in self.frame.registers:
                 for reg in reg_set:
                     register_list.append(reg.name)
-            for reg in self.arch.flag_registers:
+            for reg in self.arch().flag_registers:
                 if reg.name in register_list:
                     register_list.remove(reg.name)
         else:
@@ -284,7 +286,7 @@ class ContextHandler:
         for reg in register_list:
             if self.frame.register[reg] is not None:
                 self.print_register(self.frame.register[reg])
-        for flag_register in self.arch.flag_registers:
+        for flag_register in self.arch().flag_registers:
             if self.frame.register[flag_register.name] is not None:
                 self.print_flags_register(flag_register)
 

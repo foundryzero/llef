@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Match
 
 from lldb import SBAddress, SBInstruction, SBTarget
 
@@ -36,7 +36,7 @@ def extract_instructions(
 def color_operands(
     operands: str,
     color_settings: LLEFColorSettings,
-):
+) -> str:
     """
     Colors the registers and addresses in the instruction's operands.
 
@@ -52,10 +52,10 @@ def color_operands(
     # A register can NEVER start with numbers or any other special character other than '%'.
     register_pattern = r"(?<![\w])%?[a-zA-Z]+[0-9]*"
 
-    def color_register(match):
+    def color_register(match: Match[str]) -> str:
         return color_string(match.group(0), color_settings.register_color)
 
-    def color_address(match):
+    def color_address(match: Match[str]) -> str:
         return color_string(match.group(0), color_settings.address_operand_color)
 
     operands = re.sub(register_pattern, color_register, operands)

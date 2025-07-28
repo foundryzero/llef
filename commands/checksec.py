@@ -39,7 +39,7 @@ class ChecksecCommand(BaseCommand):
 
     program: str = "checksec"
     container = None
-    context_handler = None
+    context_handler: ContextHandler | None = None
 
     def __init__(self, debugger: SBDebugger, __: Dict[Any, Any]) -> None:
         super().__init__()
@@ -62,7 +62,7 @@ class ChecksecCommand(BaseCommand):
         """Return a longer help message"""
         return ChecksecCommand.get_command_parser().format_help()
 
-    def get_executable_type(self, target: SBTarget):
+    def get_executable_type(self, target: SBTarget) -> int:
         """
         Get executable type for a given @target ELF file.
 
@@ -71,7 +71,7 @@ class ChecksecCommand(BaseCommand):
         """
         return read_program_int(target, 0x10, 2)
 
-    def get_program_header_permission(self, target: SBTarget, target_header_type: int):
+    def get_program_header_permission(self, target: SBTarget, target_header_type: int) -> int | None:
         """
         Get value of the permission field from a program header entry.
 
@@ -79,7 +79,7 @@ class ChecksecCommand(BaseCommand):
         :param target_header_type: The type of the program header entry.
         :return: An integer between 0 and 7 representing the permission. Returns 'None' if program header is not found.
         """
-        arch = get_arch(target).bits
+        arch = get_arch(target)().bits
 
         if arch == ARCH_BITS.BITS_32:
             program_header_offset = read_program_int(target, PROGRAM_HEADER_OFFSET_32BIT_OFFSET, 4)
@@ -103,7 +103,7 @@ class ChecksecCommand(BaseCommand):
 
         return permission
 
-    def get_dynamic_entry(self, target: SBTarget, target_entry_type: int):
+    def get_dynamic_entry(self, target: SBTarget, target_entry_type: int) -> int | None:
         """
         Get value for a given entry type in the .dynamic section table.
 
@@ -126,7 +126,7 @@ class ChecksecCommand(BaseCommand):
 
         return target_entry_value
 
-    def check_security(self, target: SBTarget) -> Dict[str, SECURITY_CHECK]:
+    def check_security(self, target: SBTarget) -> Dict[SECURITY_FEATURE, SECURITY_CHECK]:
         """
         Checks the following security features on the target executable:
          - Stack Canary
@@ -162,7 +162,7 @@ class ChecksecCommand(BaseCommand):
             else:
                 checks[SECURITY_FEATURE.NX_SUPPORT] = SECURITY_CHECK.NO
         except MemoryError as error:
-            print_message(MSG_TYPE.ERROR, error)
+            print_message(MSG_TYPE.ERROR, str(error))
             checks[SECURITY_FEATURE.NX_SUPPORT] = SECURITY_CHECK.UNKNOWN
 
         # Check for PIE Support
@@ -172,7 +172,7 @@ class ChecksecCommand(BaseCommand):
             else:
                 checks[SECURITY_FEATURE.PIE_SUPPORT] = SECURITY_CHECK.NO
         except MemoryError as error:
-            print_message(MSG_TYPE.ERROR, error)
+            print_message(MSG_TYPE.ERROR, str(error))
             checks[SECURITY_FEATURE.PIE_SUPPORT] = SECURITY_CHECK.UNKNOWN
 
         # Check for Partial RelRO
@@ -182,7 +182,7 @@ class ChecksecCommand(BaseCommand):
             else:
                 checks[SECURITY_FEATURE.PARTIAL_RELRO] = SECURITY_CHECK.NO
         except MemoryError as error:
-            print_message(MSG_TYPE.ERROR, error)
+            print_message(MSG_TYPE.ERROR, str(error))
             checks[SECURITY_FEATURE.PARTIAL_RELRO] = SECURITY_CHECK.UNKNOWN
 
         # Check for Full RelRO
@@ -220,6 +220,9 @@ class ChecksecCommand(BaseCommand):
         result: SBCommandReturnObject,
     ) -> None:
         """Handles the invocation of the checksec command"""
+
+        if self.context_handler is None:
+            raise AttributeError("Class not properly initialised: self.context_handler is None")
 
         self.context_handler.refresh(exe_ctx)
 
