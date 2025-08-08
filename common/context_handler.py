@@ -1,14 +1,15 @@
 import os
-
-from typing import Dict, Type, Optional
 from string import printable
+from typing import List, Optional, Tuple, Type
 
 from lldb import (
     SBAddress,
+    SBCommandReturnObject,
     SBDebugger,
     SBError,
     SBExecutionContext,
     SBFrame,
+    SBMemoryRegionInfo,
     SBProcess,
     SBTarget,
     SBThread,
@@ -17,23 +18,23 @@ from lldb import (
 
 from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
-from common.constants import GLYPHS, TERM_COLORS
-from common.settings import LLEFSettings
 from common.color_settings import LLEFColorSettings
+from common.constants import GLYPHS, TERM_COLORS
+from common.instruction_util import extract_instructions, print_instruction, print_instructions
+from common.output_util import clear_page, color_string, output_line, print_line, print_line_with_string
+from common.settings import LLEFSettings
 from common.state import LLEFState
 from common.util import (
+    address_to_filename,
     attempt_to_read_string_from_memory,
-    clear_page,
+    find_darwin_heap_regions,
+    find_stack_regions,
     get_frame_arguments,
+    get_frame_range,
     get_registers,
     is_code,
     is_heap,
     is_stack,
-    print_instruction,
-    print_line,
-    print_line_with_string,
-    change_use_color,
-    output_line
 )
 
 
@@ -50,6 +51,8 @@ class ContextHandler:
     settings: LLEFSettings
     color_settings: LLEFColorSettings
     state: LLEFState
+    darwin_stack_regions: List[SBMemoryRegionInfo]
+    darwin_heap_regions: List[Tuple[int, int]]
 
     def __init__(
         self,
@@ -62,7 +65,9 @@ class ContextHandler:
         self.settings = LLEFSettings(debugger)
         self.color_settings = LLEFColorSettings()
         self.state = LLEFState()
-        change_use_color(self.settings.color_output)
+        self.state.change_use_color(self.settings.color_output)
+        self.darwin_stack_regions = None
+        self.darwin_heap_regions = None
 
     def generate_rebased_address_string(self, address: SBAddress) -> str:
         module = address.GetModule()
@@ -70,11 +75,7 @@ class ContextHandler:
         if module is not None and self.settings.rebase_addresses is True:
             file_name = os.path.basename(str(module.file))
             rebased_address = address.GetFileAddress() + self.settings.rebase_offset
-            return (
-                f" {TERM_COLORS[self.color_settings.rebased_address_color].value}"
-                f"({file_name} {rebased_address:#x})"
-                f"{TERM_COLORS.ENDC.value}"
-            )
+            return color_string(f"({file_name} {rebased_address:#x})", self.color_settings.rebased_address_color)
 
         return ""
 
@@ -91,28 +92,19 @@ class ContextHandler:
         pointer_value = SBAddress(pointer, self.target)
 
         if pointer_value.symbol.IsValid():
-            offset = (
-                pointer_value.offset - pointer_value.symbol.GetStartAddress().offset
-            )
-            line += (
-                f"{self.generate_rebased_address_string(pointer_value)} {GLYPHS.RIGHT_ARROW.value}"
-                f"{TERM_COLORS[self.color_settings.dereferenced_value_color].value}"
-                f"<{pointer_value.symbol.name}+{offset}>"
-                f"{TERM_COLORS.ENDC.value}"
+            offset = pointer_value.offset - pointer_value.symbol.GetStartAddress().offset
+            line += f" {self.generate_rebased_address_string(pointer_value)} {GLYPHS.RIGHT_ARROW.value}"
+            line += color_string(
+                f"<{pointer_value.symbol.name}+{offset}>", self.color_settings.dereferenced_value_color
             )
 
-        referenced_string = attempt_to_read_string_from_memory(
-            self.process, pointer_value.GetLoadAddress(self.target)
-        )
+        referenced_string = attempt_to_read_string_from_memory(self.process, pointer_value.GetLoadAddress(self.target))
 
         if len(referenced_string) > 0 and referenced_string.isprintable():
             # Only add this to the line if there are any printable characters in refd_string
             referenced_string = referenced_string.replace("\n", " ")
-            line += (
-                f' {GLYPHS.RIGHT_ARROW.value} ("'
-                f'{TERM_COLORS[self.color_settings.string_color].value}'
-                f'{referenced_string}'
-                f'{TERM_COLORS.ENDC.value}"?)'
+            line += color_string(
+                referenced_string, self.color_settings.string_color, f' {GLYPHS.RIGHT_ARROW.value} ("', "?)"
             )
 
         if address_containing_pointer is not None:
@@ -122,23 +114,21 @@ class ContextHandler:
                     registers_pointing_to_address.append(f"${register.GetName()}")
             if len(registers_pointing_to_address) > 0:
                 reg_list = ", ".join(registers_pointing_to_address)
-                line += (
-                    f" {TERM_COLORS[self.color_settings.dereferenced_register_color].value}"
-                    f"{GLYPHS.LEFT_ARROW.value}{reg_list}"
-                    f"{TERM_COLORS.ENDC.value}"
+                line += color_string(
+                    f"{GLYPHS.LEFT_ARROW.value}{reg_list}", self.color_settings.dereferenced_register_color
                 )
 
         return line
 
     def print_stack_addr(self, addr: SBValue, offset: int) -> None:
         """Produce a printable line containing information about a given stack @addr and print it"""
-        # Add stack address to line
-        line = (
-            f"{TERM_COLORS[self.color_settings.stack_address_color].value}{hex(addr.GetValueAsUnsigned())}"
-            + f"{TERM_COLORS.ENDC.value}{GLYPHS.VERTICAL_LINE.value}"
+        # Add stack address and offset to line
+
+        line = color_string(
+            hex(addr.GetValueAsUnsigned()),
+            self.color_settings.stack_address_color,
+            rwrap=f"{GLYPHS.VERTICAL_LINE.value}+{offset:04x}: ",
         )
-        # Add offset to line
-        line += f"+{offset:04x}: "
 
         # Add value to line
         err = SBError()
@@ -149,26 +139,24 @@ class ContextHandler:
             # Shouldn't happen as stack should always contain something
             line += str(err)
 
-        line += self.generate_printable_line_from_pointer(
-            stack_value, addr.GetValueAsUnsigned()
-        )
+        line += self.generate_printable_line_from_pointer(stack_value, addr.GetValueAsUnsigned())
         output_line(line)
 
     def print_memory_address(self, addr: int, offset: int, size: int) -> None:
         """Print a line containing information about @size bytes at @addr displaying @offset"""
-        # Add address to line
-        line = (
-            f"{TERM_COLORS[self.color_settings.read_memory_address_color].value}{hex(addr)}"
-            + f"{TERM_COLORS.ENDC.value}{GLYPHS.VERTICAL_LINE.value}"
+        # Add address and offset to line
+        line = color_string(
+            hex(addr),
+            self.color_settings.read_memory_address_color,
+            rwrap=f"{GLYPHS.VERTICAL_LINE.value}+{offset:04x}: ",
         )
-        # Add offset to line
-        line += f"+{offset:04x}: "
 
         # Add value to line
         err = SBError()
-        memory_value = int.from_bytes(self.process.ReadMemory(addr, size, err), 'little')
+        memory_value = self.process.ReadMemory(addr, size, err)
+
         if err.Success():
-            line += f"0x{memory_value:0{size * 2}x}"
+            line += f"0x{int.from_bytes(memory_value, 'little'):0{size * 2}x}"
         else:
             line += str(err)
 
@@ -178,10 +166,7 @@ class ContextHandler:
         """Print a line containing information about @size individual bytes at @addr"""
         if size > 0:
             # Add address to line
-            line = (
-                f"{TERM_COLORS[self.color_settings.read_memory_address_color].value}{hex(addr)}"
-                + f"{TERM_COLORS.ENDC.value}    "
-            )
+            line = color_string(hex(addr), self.color_settings.read_memory_address_color, "", "\t")
 
             # Add value to line
             err = SBError()
@@ -210,24 +195,22 @@ class ContextHandler:
 
         if self.state.prev_registers.get(reg_name) == register.GetValueAsUnsigned():
             # Register value as not changed
-            highlight = TERM_COLORS[self.color_settings.register_color]
+            highlight = self.color_settings.register_color
         else:
             # Register value has changed so highlight
-            highlight = TERM_COLORS[self.color_settings.modified_register_color]
+            highlight = self.color_settings.modified_register_color
 
-        if is_code(reg_value, self.process, self.regions):
-            color = TERM_COLORS[self.color_settings.code_color]
-        elif is_stack(reg_value, self.process, self.regions):
-            color = TERM_COLORS[self.color_settings.stack_color]
-        elif is_heap(reg_value, self.process, self.regions):
-            color = TERM_COLORS[self.color_settings.heap_color]
+        if is_code(reg_value, self.process, self.target, self.regions):
+            color = self.color_settings.code_color
+        elif is_stack(reg_value, self.regions, self.darwin_stack_regions):
+            color = self.color_settings.stack_color
+        elif is_heap(reg_value, self.target, self.regions, self.darwin_stack_regions, self.darwin_heap_regions):
+            color = self.color_settings.heap_color
         else:
-            color = TERM_COLORS.ENDC
+            color = None
         formatted_reg_value = f"{reg_value:x}".ljust(12)
-        line = (
-            f"{highlight.value}{reg_name.ljust(7)}{TERM_COLORS.ENDC.value}: "
-            + f"{color.value}0x{formatted_reg_value}{TERM_COLORS.ENDC.value}"
-        )
+        line = color_string(reg_name.ljust(7), highlight, "", ": ")
+        line += color_string(f"0x{formatted_reg_value}", color)
 
         line += self.generate_printable_line_from_pointer(reg_value)
 
@@ -239,19 +222,15 @@ class ContextHandler:
 
         if self.state.prev_registers.get(flag_register.name) == flag_value:
             # No change
-            highlight = TERM_COLORS[self.color_settings.register_color]
+            highlight = self.color_settings.register_color
         else:
             # Change and highlight
-            highlight = TERM_COLORS[self.color_settings.modified_register_color]
+            highlight = self.color_settings.modified_register_color
 
-        line = f"{highlight.value}{flag_register.name.ljust(7)}{TERM_COLORS.ENDC.value}: ["
-        line += " ".join(
-            [
-                name.upper() if flag_value & bitmask else name
-                for name, bitmask in flag_register.bit_masks.items()
-            ]
+        flags = " ".join(
+            [name.upper() if flag_value & bitmask else name for name, bitmask in flag_register.bit_masks.items()]
         )
-        line += "]"
+        line = color_string(flag_register.name.ljust(7), highlight, rwrap=f": [{flags}]")
         output_line(line)
 
     def update_registers(self) -> None:
@@ -268,23 +247,27 @@ class ContextHandler:
     def print_legend(self) -> None:
         """Print a line containing the color legend"""
 
-        output_line(
-            f"[ Legend: "
-            f"{TERM_COLORS[self.color_settings.modified_register_color].value}"
-            f"Modified register{TERM_COLORS.ENDC.value} | "
-            f"{TERM_COLORS[self.color_settings.code_color].value}Code{TERM_COLORS.ENDC.value} | "
-            f"{TERM_COLORS[self.color_settings.heap_color].value}Heap{TERM_COLORS.ENDC.value} | "
-            f"{TERM_COLORS[self.color_settings.stack_color].value}Stack{TERM_COLORS.ENDC.value} | "
-            f"{TERM_COLORS[self.color_settings.string_color].value}String{TERM_COLORS.ENDC.value} ]"
-        )
+        legend = "[ Legend: "
+        legend += color_string("Modified register", self.color_settings.modified_register_color, rwrap=" | ")
+        legend += color_string("Code", self.color_settings.code_color, rwrap=" | ")
+
+        # Only set when platform is Darwin (iOS, MacOS, etc) and darwin heap scan is enabled in settings.
+        if self.darwin_heap_regions is not None:
+            legend += color_string("Heap (Darwin heap scan)", self.color_settings.heap_color, rwrap=" | ")
+        else:
+            legend += color_string("Heap", self.color_settings.heap_color, rwrap=" | ")
+
+        legend += color_string("Stack", self.color_settings.stack_color, rwrap=" | ")
+        legend += color_string("String", self.color_settings.string_color, rwrap=" ]")
+        output_line(legend)
 
     def display_registers(self) -> None:
         """Print the registers display section"""
 
         print_line_with_string(
             "registers",
-            line_color=TERM_COLORS[self.color_settings.line_color],
-            string_color=TERM_COLORS[self.color_settings.section_header_color]
+            line_color=self.color_settings.line_color,
+            string_color=self.color_settings.section_header_color,
         )
 
         if self.settings.show_all_registers:
@@ -310,8 +293,8 @@ class ContextHandler:
 
         print_line_with_string(
             "stack",
-            line_color=TERM_COLORS[self.color_settings.line_color],
-            string_color=TERM_COLORS[self.color_settings.section_header_color]
+            line_color=self.color_settings.line_color,
+            string_color=self.color_settings.section_header_color,
         )
         for inc in range(0, self.arch().bits, 8):
             stack_pointer = self.frame.GetSP()
@@ -324,58 +307,52 @@ class ContextHandler:
         """
         print_line_with_string(
             "code",
-            line_color=TERM_COLORS[self.color_settings.line_color],
-            string_color=TERM_COLORS[self.color_settings.section_header_color]
+            line_color=self.color_settings.line_color,
+            string_color=self.color_settings.section_header_color,
         )
 
-        if self.frame.disassembly:
-            instructions = self.frame.disassembly.split("\n")
+        pc = self.frame.GetPC()
 
-            current_pc = hex(self.frame.GetPC())
-            for i, item in enumerate(instructions):
-                if current_pc in item.split(':')[0]:
-                    output_line(instructions[0])
-                    if i > 3:
-                        print_instruction(instructions[i - 3], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(instructions[i - 2], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
-                        # This slice notation (and the 4 below) are a buggy interaction of black and pycodestyle
-                        # See: https://github.com/psf/black/issues/157
-                        # fmt: off
-                        for instruction in instructions[i + 1:i + 6]:  # noqa
-                            # fmt: on
-                            print_instruction(instruction)
-                    if i == 3:
-                        print_instruction(instructions[i - 2], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
-                        # fmt: off
-                        for instruction in instructions[i + 1:10]:  # noqa
-                            # fmt: on
-                            print_instruction(instruction)
-                    if i == 2:
-                        print_instruction(instructions[i - 1], TERM_COLORS[self.color_settings.instruction_color])
-                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
-                        # fmt: off
-                        for instruction in instructions[i + 1:10]:  # noqa
-                            # fmt: on
-                            print_instruction(instruction)
-                    if i == 1:
-                        print_instruction(item, TERM_COLORS[self.color_settings.highlighted_instruction_color])
-                        # fmt: off
-                        for instruction in instructions[i + 1:10]:  # noqa
-                            # fmt: on
-                            print_instruction(instruction)
-        else:
-            output_line("No disassembly to print")
+        filename = address_to_filename(self.target, pc)
+        function_name = self.frame.GetFunctionName()
+        output_line(f"{filename}'{function_name}:")
+
+        frame_start_address, frame_end_address = get_frame_range(self.frame, self.target)
+
+        pre_instructions = extract_instructions(self.target, frame_start_address, pc - 1, self.state.disassembly_syntax)
+        print_instructions(
+            self.target,
+            pre_instructions[-3:],
+            frame_start_address,
+            self.color_settings,
+        )
+
+        post_instructions = extract_instructions(self.target, pc, frame_end_address, self.state.disassembly_syntax)
+
+        if len(post_instructions) > 0:
+            pc_instruction = post_instructions[0]
+            print_instruction(
+                self.target,
+                pc_instruction,
+                frame_start_address,
+                self.color_settings,
+                True,
+            )
+
+            limit = 9 - min(len(pre_instructions), 3)
+            print_instructions(
+                self.target,
+                post_instructions[1:limit],
+                frame_start_address,
+                self.color_settings,
+            )
 
     def display_threads(self) -> None:
         """Print LLDB formatted thread information"""
         print_line_with_string(
             "threads",
-            line_color=TERM_COLORS[self.color_settings.line_color],
-            string_color=TERM_COLORS[self.color_settings.section_header_color]
+            line_color=self.color_settings.line_color,
+            string_color=self.color_settings.section_header_color,
         )
         for thread in self.process:
             output_line(thread)
@@ -386,16 +363,16 @@ class ContextHandler:
         """
         print_line_with_string(
             "trace",
-            line_color=TERM_COLORS[self.color_settings.line_color],
-            string_color=TERM_COLORS[self.color_settings.section_header_color]
+            line_color=self.color_settings.line_color,
+            string_color=self.color_settings.section_header_color,
         )
 
         for i in range(self.thread.GetNumFrames()):
             if i == 0:
-                number_color = TERM_COLORS[self.color_settings.highlighted_index_color]
+                number_color = self.color_settings.highlighted_index_color
             else:
-                number_color = TERM_COLORS[self.color_settings.index_color]
-            line = f"[{number_color.value}#{i}{TERM_COLORS.ENDC.value}] "
+                number_color = self.color_settings.index_color
+            line = color_string(f"#{i}", number_color, "[", "]")
 
             current_frame = self.thread.GetFrameAtIndex(i)
             pc_address = current_frame.GetPCAddress()
@@ -405,29 +382,42 @@ class ContextHandler:
             if func:
                 line += (
                     f"{trace_address:#x}{self.generate_rebased_address_string(pc_address)}  {GLYPHS.RIGHT_ARROW.value} "
-                    f"{TERM_COLORS[self.color_settings.function_name_color].value}"
-                    f"{func.GetName()}{TERM_COLORS.ENDC.value}"
+                    f"{color_string(func.GetName(), self.color_settings.function_name_color)}"
                 )
             else:
                 line += (
                     f"{trace_address:#x}{self.generate_rebased_address_string(pc_address)}  {GLYPHS.RIGHT_ARROW.value} "
-                    f"{TERM_COLORS[self.color_settings.function_name_color].value}"
-                    f"{current_frame.GetSymbol().GetName()}{TERM_COLORS.ENDC.value}"
+                    f"{color_string(current_frame.GetSymbol().GetName(), self.color_settings.function_name_color)}"
                 )
 
             line += get_frame_arguments(
-                current_frame,
-                frame_argument_name_color=TERM_COLORS[self.color_settings.frame_argument_name_color]
+                current_frame, frame_argument_name_color=TERM_COLORS[self.color_settings.frame_argument_name_color]
             )
 
             output_line(line)
 
+    def load_disassembly_syntax(self, debugger: SBDebugger) -> None:
+        """Load the disassembly flavour from LLDB into LLEF's state."""
+        self.state.disassembly_syntax = "default"
+        if LLEFState.version >= [16]:
+            self.state.disassembly_syntax = debugger.GetSetting("target.x86-disassembly-flavor").GetStringValue(100)
+
+        if self.state.disassembly_syntax == "":
+            command_interpreter = debugger.GetCommandInterpreter()
+            result = SBCommandReturnObject()
+            command_interpreter.HandleCommand("settings show target.x86-disassembly-flavor", result)
+            if result.Succeeded():
+                self.state.disassembly_syntax = result.GetOutput().split("=")[1][1:].replace("\n", "")
+
+        if self.state.disassembly_syntax == "":
+            self.state.disassembly_syntax = "default"
+
     def refresh(self, exe_ctx: SBExecutionContext) -> None:
         """Refresh stored values"""
-        self.frame = exe_ctx.GetFrame()
         self.process = exe_ctx.GetProcess()
         self.target = exe_ctx.GetTarget()
         self.thread = exe_ctx.GetThread()
+        self.frame = self.thread.GetFrameAtIndex(0)
         if self.settings.force_arch is not None:
             self.arch = get_arch_from_str(self.settings.force_arch)
         else:
@@ -438,11 +428,19 @@ class ContextHandler:
         else:
             self.regions = None
 
-    def display_context(
-        self,
-        exe_ctx: SBExecutionContext,
-        update_registers: bool
-    ) -> None:
+        if self.state.disassembly_syntax == "":
+            self.load_disassembly_syntax(self.debugger)
+
+        if LLEFState.platform == "Darwin":
+            self.darwin_stack_regions = find_stack_regions(self.process)
+            if self.settings.enable_darwin_heap_scan:
+                self.darwin_heap_regions = find_darwin_heap_regions(self.process)
+            else:
+                # Setting darwin_heap_regions to None will cause the fallback heap
+                # scanning method to be used.
+                self.darwin_heap_regions = None
+
+    def display_context(self, exe_ctx: SBExecutionContext, update_registers: bool) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""
 
         # Refresh frame, process, target, and thread objects at each stop.
@@ -453,24 +451,22 @@ class ContextHandler:
             self.update_registers()
 
         # Hack to print cursor at the top of the screen
-        clear_page()
+        if self.debugger.GetUseColor():
+            clear_page()
 
         if self.settings.show_legend:
             self.print_legend()
 
-        if self.settings.show_registers:
-            self.display_registers()
+        for section in self.settings.output_order.split(","):
+            if section == "registers" and self.settings.show_registers:
+                self.display_registers()
+            elif section == "stack" and self.settings.show_stack:
+                self.display_stack()
+            elif section == "code" and self.settings.show_code:
+                self.display_code()
+            elif section == "threads" and self.settings.show_threads:
+                self.display_threads()
+            elif section == "trace" and self.settings.show_trace:
+                self.display_trace()
 
-        if self.settings.show_stack:
-            self.display_stack()
-
-        if self.settings.show_code:
-            self.display_code()
-
-        if self.settings.show_threads:
-            self.display_threads()
-
-        if self.settings.show_trace:
-            self.display_trace()
-
-        print_line(color=TERM_COLORS[self.color_settings.line_color])
+        print_line(color=self.color_settings.line_color)

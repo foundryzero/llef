@@ -8,6 +8,7 @@ from typing import Dict, List
 @dataclass
 class FlagRegister:
     """FlagRegister dataclass to store register name / bitmask associations"""
+
     name: str
     bit_masks: Dict[str, int]
 

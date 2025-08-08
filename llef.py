@@ -10,21 +10,23 @@
 # The __lldb_init_module function automatically loads the stop-hook-handler
 # ---------------------------------------------------------------------
 
+import platform
 from typing import Any, Dict, List, Type, Union
 
 from lldb import SBDebugger
 
 from commands.base_command import BaseCommand
 from commands.base_container import BaseContainer
-from commands.pattern import (
-    PatternContainer,
-    PatternCreateCommand,
-    PatternSearchCommand,
-)
-from commands.context import ContextCommand
-from commands.settings import SettingsCommand
+from commands.checksec import ChecksecCommand
 from commands.color_settings import ColorSettingsCommand
+from commands.context import ContextCommand
+from commands.dereference import DereferenceCommand
 from commands.hexdump import HexdumpCommand
+from commands.pattern import PatternContainer, PatternCreateCommand, PatternSearchCommand
+from commands.scan import ScanCommand
+from commands.settings import SettingsCommand
+from commands.xinfo import XinfoCommand
+from common.state import LLEFState
 from handlers.stop_hook import StopHookHandler
 
 
@@ -36,7 +38,11 @@ def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
         ContextCommand,
         SettingsCommand,
         ColorSettingsCommand,
-        HexdumpCommand
+        HexdumpCommand,
+        ChecksecCommand,
+        XinfoCommand,
+        DereferenceCommand,
+        ScanCommand,
     ]
 
     handlers = [StopHookHandler]
@@ -46,3 +52,11 @@ def __lldb_init_module(debugger: SBDebugger, _: Dict[Any, Any]) -> None:
 
     for handler in handlers:
         handler.lldb_self_register(debugger, "llef")
+
+    LLEFState.platform = platform.system()
+    if LLEFState.platform == "Darwin":
+        # Getting Clang version (e.g.  lldb-1600.0.36.3)
+        LLEFState.version = [int(x) for x in debugger.GetVersionString().split()[0].split("-")[1].split(".")]
+    else:
+        # Getting LLDB version (e.g. lldb version 16.0.0)
+        LLEFState.version = [int(x) for x in debugger.GetVersionString().split("version")[1].split()[0].split(".")]

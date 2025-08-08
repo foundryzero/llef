@@ -1,6 +1,6 @@
 """Constant definitions."""
 
-from enum import Enum
+from enum import Enum, IntEnum
 
 
 class TERM_COLORS(Enum):
@@ -52,3 +52,86 @@ class SIZES(Enum):
     DWORD = 4
     WORD = 2
     BYTE = 1
+
+
+class XINFO(Enum):
+    REGION_START = "Region Start"
+    REGION_END = "Region End"
+    REGION_SIZE = "Region Size"
+    REGION_OFFSET = "Region Offset"
+    PERMISSIONS = "Permissions"
+    PATH = "Path"
+    INODE = "INode"
+
+
+class SECURITY_FEATURE(Enum):
+    STACK_CANARY = "Stack Canary"
+    NX_SUPPORT = "NX Support"
+    PIE_SUPPORT = "PIE Support"
+    NO_RPATH = "No RPath"
+    NO_RUNPATH = "No RunPath"
+    PARTIAL_RELRO = "Partial RelRO"
+    FULL_RELRO = "Full RelRO"
+
+
+class SECURITY_CHECK(Enum):
+    NO = "No"
+    YES = "Yes"
+    UNKNOWN = "Unknown"
+
+
+class PERMISSION_SET:
+    """Values for 3bit permission sets."""
+
+    NOT_EXEC = [0, 2, 4, 6]
+    EXEC = [1, 3, 5, 7]
+
+
+class PROGRAM_HEADER_TYPE(IntEnum):
+    """Program header type values (in ELF files)."""
+
+    GNU_STACK = 0x6474E551
+    GNU_RELRO = 0x6474E552
+
+
+class EXECUTABLE_TYPE(IntEnum):
+    """Executable ELF file types."""
+
+    DYN = 0x03
+
+
+class DYNAMIC_ENTRY_TYPE(IntEnum):
+    """Entry types in the .dynamic section table of the ELF file."""
+
+    FLAGS = 0x1E
+    RPATH = 0x0F
+    RUNPATH = 0x1D
+
+
+class DYNAMIC_ENTRY_VALUE(IntEnum):
+    """Entry values in the .dynamic section table of the ELF file."""
+
+    BIND_NOW = 0x08
+
+
+class ARCH_BITS(IntEnum):
+    """32bit or 64bit architecture."""
+
+    BITS_32 = 1
+    BITS_64 = 2
+
+
+class MAGIC_BYTES(Enum):
+    """Magic byte signatures for executable files."""
+
+    ELF = [b"\x7f\x45\x4c\x46"]
+    MACH = [
+        b"\xfe\xed\xfa\xce",
+        b"\xfe\xed\xfa\xcf",
+        b"\xce\xfa\xed\xfe",
+        b"\xcf\xfa\xed\xfe",
+    ]
+
+
+DEFAULT_TERMINAL_COLUMNS = 80
+DEFAULT_TERMINAL_LINES = 24

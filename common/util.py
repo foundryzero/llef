@@ -1,101 +1,61 @@
 """Utility functions."""
 
-from typing import List, Any
-import re
+import os
 import shutil
+from argparse import ArgumentTypeError
+from typing import List, Tuple
 
-from lldb import SBError, SBFrame, SBMemoryRegionInfo, SBMemoryRegionInfoList, SBProcess, SBValue
+from lldb import (
+    SBAddress,
+    SBError,
+    SBExecutionContext,
+    SBExpressionOptions,
+    SBFrame,
+    SBMemoryRegionInfo,
+    SBMemoryRegionInfoList,
+    SBProcess,
+    SBTarget,
+    SBValue,
+    eLanguageTypeObjC_plus_plus,
+    eNoDynamicValues,
+    value,
+)
 
-from common.constants import ALIGN, GLYPHS, MSG_TYPE, TERM_COLORS
+from common.constants import DEFAULT_TERMINAL_COLUMNS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
+from common.output_util import print_message
 from common.state import LLEFState
 
 
-def change_use_color(new_value: bool) -> None:
+def terminal_columns() -> int:
+    return shutil.get_terminal_size().columns or DEFAULT_TERMINAL_COLUMNS
+
+
+def address_to_filename(target: SBTarget, address: int) -> str:
     """
-    Change the global use_color bool. use_color should not be written to directly
+    Maps a memory address to its corresponding executable/library and returns the filename.
+
+    :param target: The target context.
+    :param address: The memory address to resolve.
+    :return: The filename.
     """
-    LLEFState.use_color = new_value
+    sb_address = SBAddress(address, target)
+    module = sb_address.GetModule()
+    file_spec = module.GetSymbolFileSpec()
+    filename = file_spec.GetFilename()
+
+    return filename
 
 
-def output_line(line: Any) -> None:
-    """
-    Format a line of output for printing. Print should not be used elsewhere.
-    Exception - clear_page would not function without terminal characters
-    """
-    line = str(line)
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    if LLEFState.use_color is False:
-        line = ansi_escape.sub('', line)
-    print(line)
+def get_frame_range(frame: SBFrame, target: SBTarget) -> Tuple[str, str]:
+    function = frame.GetFunction()
+    if function:
+        start_address = function.GetStartAddress().GetLoadAddress(target)
+        end_address = function.GetEndAddress().GetLoadAddress(target)
+    else:
+        start_address = frame.GetSymbol().GetStartAddress().GetLoadAddress(target)
+        end_address = frame.GetSymbol().GetEndAddress().GetLoadAddress(target) - 1
 
-
-def clear_page() -> None:
-    """
-    Used to clear the previously printed breakpoint information before
-    printing the next information.
-    """
-    num_lines = shutil.get_terminal_size().lines
-    for _ in range(num_lines):
-        print()
-    print("\033[0;0H")  # Ansi escape code: Set cursor to 0,0 position
-    print("\033[J")  # Ansi escape code: Clear contents from cursor to end of screen
-
-
-def print_line_with_string(
-    string: str,
-    char: GLYPHS = GLYPHS.HORIZONTAL_LINE,
-    line_color: TERM_COLORS = TERM_COLORS.GREY,
-    string_color: TERM_COLORS = TERM_COLORS.BLUE,
-    align: ALIGN = ALIGN.RIGHT,
-) -> None:
-    """Print a line with the provided @string padded with @char"""
-    width = shutil.get_terminal_size().columns
-    if align == ALIGN.RIGHT:
-        l_pad = (width - len(string) - 6) * char.value
-        r_pad = 4 * char.value
-
-    elif align == ALIGN.CENTRE:
-        l_pad = (width - len(string)) * char.value
-        r_pad = 4 * char.value
-
-    elif align == ALIGN.LEFT:
-        l_pad = 4 * char.value
-        r_pad = (width - len(string) - 6) * char.value
-
-    output_line(
-        f"{line_color.value}{l_pad}{TERM_COLORS.ENDC.value} "
-        + f"{string_color.value}{string}{TERM_COLORS.ENDC.value} {line_color.value}{r_pad}{TERM_COLORS.ENDC.value}"
-    )
-
-
-def print_line(
-    char: GLYPHS = GLYPHS.HORIZONTAL_LINE, color: TERM_COLORS = TERM_COLORS.GREY
-) -> None:
-    """Print a line of @char"""
-    output_line(
-        f"{color.value}{shutil.get_terminal_size().columns*char.value}{TERM_COLORS.ENDC.value}"
-    )
-
-
-def print_message(msg_type: MSG_TYPE, message: str) -> None:
-    """Format and print a @message"""
-    info_color = TERM_COLORS.BLUE
-    success_color = TERM_COLORS.GREEN
-    error_color = TERM_COLORS.GREEN
-
-    if msg_type == MSG_TYPE.INFO:
-        output_line(f"{info_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
-    elif msg_type == MSG_TYPE.SUCCESS:
-        output_line(f"{success_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
-    elif msg_type == MSG_TYPE.ERROR:
-        output_line(f"{error_color.value}[+]{TERM_COLORS.ENDC.value} {message}")
-
-
-def print_instruction(line: str, color: TERM_COLORS = TERM_COLORS.ENDC) -> None:
-    """Format and print a line of disassembly returned from LLDB (SBFrame.disassembly)"""
-    loc_0x = line.find("0x")
-    start_idx = loc_0x if loc_0x >= 0 else 0
-    output_line(f"{color.value}{line[start_idx:]}{TERM_COLORS.ENDC.value}")
+    return start_address, end_address
 
 
 def get_registers(frame: SBFrame, frame_type: str) -> List[SBValue]:
@@ -128,15 +88,11 @@ def get_frame_arguments(frame: SBFrame, frame_argument_name_color: TERM_COLORS) 
                 value = f"{int(var.GetValue(), 0):#x}"
             except ValueError:
                 pass
-        args.append(
-            f"{frame_argument_name_color.value}{var.GetName()}{TERM_COLORS.ENDC.value}={value}"
-        )
+        args.append(f"{frame_argument_name_color.value}{var.GetName()}{TERM_COLORS.ENDC.value}={value}")
     return f"({' '.join(args)})"
 
 
-def attempt_to_read_string_from_memory(
-    process: SBProcess, addr: SBValue, buffer_size: int = 256
-) -> str:
+def attempt_to_read_string_from_memory(process: SBProcess, addr: SBValue, buffer_size: int = 256) -> str:
     """
     Returns a string from a memory address if one can be read, else an empty string
     """
@@ -144,7 +100,7 @@ def attempt_to_read_string_from_memory(
     ret_string = ""
     try:
         string = process.ReadCStringFromMemory(addr, buffer_size, err)
-        if err.Success():
+        if err.Success() and string.isprintable():
             ret_string = string
     except SystemError:
         # This swallows an internal error that is sometimes generated by a bug in LLDB.
@@ -152,41 +108,351 @@ def attempt_to_read_string_from_memory(
     return ret_string
 
 
-def is_code(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
+def is_ascii_string(address: SBValue, process: SBProcess) -> bool:
+    """
+    Determines if a given memory @address contains a readable string.
+
+    :param address: The memory address to read.
+    :param process: A running process of the target.
+    :return: A boolean of the check.
+    """
+    return attempt_to_read_string_from_memory(process, address) != ""
+
+
+def is_in_section(address: SBValue, target: SBTarget, target_section_name: str) -> bool:
+    """
+    Determines whether a given memory @address exists within a @section of the executable file @target.
+
+    The section's parents are searched to generate a full section name (e.g., __TEXT.__c_string).
+
+    :param address: The memory address to check.
+    :param target: The target object file.
+    :param section: The section of the executable file.
+    :return: A boolean of the check.
+    """
+
+    sb_address = target.ResolveLoadAddress(address)
+    section = sb_address.GetSection()
+    full_section_name = ""
+    while section:
+        full_section_name = section.GetName() + "." + full_section_name
+        section = section.GetParent()
+
+    return target_section_name in full_section_name
+
+
+def is_text_region(address: SBValue, target: SBTarget, region: SBMemoryRegionInfo) -> bool:
+    """
+    Determines if a given memory @address if within a '.text' section of the target executable.
+
+    :param address: The memory address to check.
+    :param target: The target object file.
+    :param region: The memory region that the address exists in.
+    :return: A boolean of the check.
+    """
+
+    in_text = False
+    if is_file(target, MAGIC_BYTES.MACH.value):
+        if is_in_section(address, target, "__TEXT"):
+            in_text = True
+    else:
+        file = target.GetExecutable()
+        if is_in_section(address, target, ".text") or (
+            file.GetFilename() in region.GetName() and file.GetDirectory() in region.GetName()
+        ):
+            in_text = True
+
+    return in_text
+
+
+def is_code(address: SBValue, process: SBProcess, target: SBTarget, regions: SBMemoryRegionInfoList) -> bool:
     """Determines whether an @address points to code"""
-    if regions is None:
-        return False
     region = SBMemoryRegionInfo()
     code_bool = False
-    if regions.GetMemoryRegionContainingAddress(address, region):
-        code_bool = region.IsExecutable()
+    if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
+        code_bool = region.IsExecutable() and is_text_region(
+            address, target, region
+        )  # and not is_ascii_string(address, process)
     return code_bool
 
 
-def is_stack(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
+def is_stack(address: SBValue, regions: SBMemoryRegionInfoList, darwin_stack_regions: List[SBMemoryRegionInfo]) -> bool:
     """Determines whether an @address points to the stack"""
-    if regions is None:
-        return False
-    region = SBMemoryRegionInfo()
+
     stack_bool = False
-    if regions.GetMemoryRegionContainingAddress(address, region):
-        if region.GetName() == "[stack]":
+    region = SBMemoryRegionInfo()
+    if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
+        if LLEFState.platform == "Darwin" and region in darwin_stack_regions:
             stack_bool = True
+        elif region.GetName() == "[stack]":
+            stack_bool = True
+
     return stack_bool
 
 
-def is_heap(address: SBValue, process: SBProcess, regions: SBMemoryRegionInfoList) -> bool:
+def is_heap(
+    address: SBValue,
+    target: SBTarget,
+    regions: SBMemoryRegionInfoList,
+    stack_regions: List[SBMemoryRegionInfo],
+    darwin_heap_regions: List[Tuple[int, int]],
+) -> bool:
     """Determines whether an @address points to the heap"""
-    if regions is None:
-        return False    
-    region = SBMemoryRegionInfo()
     heap_bool = False
-    if regions.GetMemoryRegionContainingAddress(address, region):
-        if region.GetName() == "[heap]":
-            heap_bool = True
+
+    if darwin_heap_regions is not None:
+        # Only set when platform is Darwin (iOS, MacOS, etc) and darwin heap scan is enabled in settings.
+        for lo, hi in darwin_heap_regions:
+            if address >= lo and address < hi:
+                heap_bool = True
+    else:
+        region = SBMemoryRegionInfo()
+        if regions is not None and regions.GetMemoryRegionContainingAddress(address, region):
+            if LLEFState.platform == "Darwin":
+                sb_address = SBAddress(address, target)
+                filename = sb_address.GetModule().GetFileSpec().GetFilename()
+                if filename is None and not is_stack(address, regions, stack_regions) and region.IsWritable():
+                    heap_bool = True
+            elif region.GetName() == "[heap]":
+                heap_bool = True
     return heap_bool
 
 
 def extract_arch_from_triple(triple: str) -> str:
     """Extracts the architecture from triple string."""
     return triple.split("-")[0]
+
+
+def verify_version(version: List[int], target_version: List[int]) -> bool:
+    """Checks if the @version is greater than or equal to the @target_version."""
+    length_difference = len(target_version) - len(version)
+    if length_difference > 0:
+        version += [0] * length_difference
+    elif length_difference < 0:
+        target_version += [0] * abs(length_difference)
+
+    return version >= target_version
+
+
+def lldb_version_to_clang(lldb_version):
+    """
+    Convert an LLDB version to its corresponding Clang version.
+
+    :param lldb_version: The LLDB version.
+    :return: The Clang version.
+    """
+
+    clang_version = [0]
+    if verify_version(lldb_version, [17, 0, 6]):
+        clang_version = [1600, 0, 26, 3]
+    elif verify_version(lldb_version, [16, 0, 0]):
+        clang_version = [1500, 0, 40, 1]
+    elif verify_version(lldb_version, [15, 0, 0]):
+        clang_version = [1403, 0, 22, 14, 1]
+
+    return clang_version
+
+
+def check_version(required_version_string):
+    def inner(func):
+        def wrapper(*args, **kwargs):
+            required_version = [int(x) for x in required_version_string.split(".")]
+            if LLEFState.platform == "Darwin":
+                required_version = lldb_version_to_clang(required_version)
+            if not verify_version(LLEFState.version, required_version):
+                print(f"error: requires LLDB version {required_version_string} to execute")
+                return
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return inner
+
+
+def check_process(func):
+    """
+    Checks that there's a running process before executing the wrapped function. Only to be used on
+    overrides of `__call__`.
+
+    :param func: Wrapped function to be executed after successful check.
+    """
+
+    def wrapper(*args, **kwargs):
+        for arg in list(args) + list(kwargs.values()):
+            if isinstance(arg, SBExecutionContext):
+                if arg.process.is_alive:
+                    return func(*args, **kwargs)
+
+                print_message(MSG_TYPE.ERROR, "Requires a running process.")
+                return
+
+        print_message(MSG_TYPE.ERROR, "Execution context not found.")
+
+    return wrapper
+
+
+def check_target(func):
+    def wrapper(*args, **kwargs):
+        for arg in list(args) + list(kwargs.values()):
+            if isinstance(arg, SBExecutionContext):
+                if arg.target.IsValid():
+                    return func(*args, **kwargs)
+
+                print_message(MSG_TYPE.ERROR, "Requires a valid target.")
+                return
+
+        print_message(MSG_TYPE.ERROR, "Execution context not found.")
+
+    return wrapper
+
+
+def is_file(target: SBTarget, expected_magic_bytes: List[bytes]):
+    """Read signature of @target file and compare to expected magic bytes."""
+    magic_bytes = read_program(target, 0, 4)
+    return magic_bytes in expected_magic_bytes
+
+
+def check_elf(func):
+    def wrapper(*args, **kwargs):
+        for arg in list(args) + list(kwargs.values()):
+            if isinstance(arg, SBExecutionContext):
+                try:
+                    if is_file(arg.target, MAGIC_BYTES.ELF.value):
+                        return func(*args, **kwargs)
+                    else:
+                        print_message(MSG_TYPE.ERROR, "Target must be an ELF file.")
+                        return
+                except MemoryError:
+                    print_message(MSG_TYPE.ERROR, "couldn't determine file type")
+                    return
+
+        print_message(MSG_TYPE.ERROR, "Execution context not found.")
+
+    return wrapper
+
+
+def hex_int(x):
+    """A converter for input arguments in different bases to ints.
+    For base 0, the base is determined by the prefix. So, numbers starting `0x` are hex
+    and numbers with no prefix are decimal. Base 0 also disallows leading zeros.
+    """
+    return int(x, 0)
+
+
+def positive_int(x):
+    """A converter for input arguments in different bases to positive ints"""
+    x = hex_int(x)
+    if x <= 0:
+        raise ArgumentTypeError("Must be positive")
+    return x
+
+
+def hex_or_str(x):
+    """Convert to formatted hex if an integer, otherwise return the value."""
+    if isinstance(x, int):
+        return f"0x{x:016x}"
+
+    return x
+
+
+def read_program(target: SBTarget, offset: int, n: int):
+    """
+    Read @n bytes from a given @offset from the start of @target object file.
+
+    :param target: The target object file.
+    :param offset: The byte offset of the file to start reading from.
+    :param n: The number of bytes to read from the offset.
+    :return: The read bytes convert to an integer with little endianness.
+    """
+
+    error = SBError()
+    # Executable has always been observed at module 0, but isn't specifically stated in docs.
+    program_module = target.GetModuleAtIndex(0)
+    address = program_module.GetObjectFileHeaderAddress()
+    address.OffsetAddress(offset)
+    data = target.ReadMemory(address, n, error)
+
+    if error.Fail():
+        raise MemoryError(f"Couldn't read memory at file offset {hex(address.GetOffset())}.")
+
+    return data
+
+
+def read_program_int(target: SBTarget, offset: int, n: int):
+    """
+    Read @n bytes from a given @offset from the start of @target object file,
+    and convert to integer by little endian.
+
+    :param target: The target object file.
+    :param offset: The byte offset of the file to start reading from.
+    :param n: The number of bytes to read from the offset.
+    :return: The read bytes convert to an integer with little endianness.
+    """
+
+    data = read_program(target, offset, n)
+    return int.from_bytes(data, "little")
+
+
+def find_stack_regions(process: SBProcess) -> List[SBMemoryRegionInfo]:
+    """
+    Find all memory regions containing the stack by looping through stack pointers in each frame.
+
+    :return: A list of memory region objects.
+    """
+    stack_regions = []
+    for frame in process.GetSelectedThread().frames:
+        sp = frame.GetSP()
+        region = SBMemoryRegionInfo()
+        process.GetMemoryRegionInfo(sp, region)
+        stack_regions.append(region)
+
+    return stack_regions
+
+
+def find_darwin_heap_regions(process: SBProcess) -> List[Tuple[int, int]]:
+    """
+    Find memory heap regions on Darwin.
+
+    :return: List[Tuple[int, int]]: A list containing values for min and max ranges for heap regions on Darwin.
+    """
+
+    MAX_MATCHES = 128
+
+    # Define Objective C++ code to be run as an LLDB expression.
+
+    # Read template file, replace MAX_MATCHES value.
+    common_dir = os.path.dirname(os.path.abspath(__file__))
+    expr_file_path = os.path.join(common_dir, "expressions", "darwin_get_malloc_zones.mm")
+
+    with open(expr_file_path, "r") as expr_file:
+        expr = expr_file.read().replace("{{MAX_MATCHES}}", str(MAX_MATCHES))
+
+    # Return SBFrame stack frame object from current thread.
+    frame = process.GetSelectedThread().GetSelectedFrame()
+
+    # Set options for evaluating Objective C++ code.
+    expr_options = SBExpressionOptions()
+    expr_options.SetIgnoreBreakpoints(True)
+    expr_options.SetFetchDynamicValue(eNoDynamicValues)
+    # Set a 3 second timeout.
+    expr_options.SetTimeoutInMicroSeconds(3 * 1000 * 1000)
+    expr_options.SetTryAllThreads(False)
+    expr_options.SetLanguage(eLanguageTypeObjC_plus_plus)
+
+    expr_sbvalue = frame.EvaluateExpression(expr, expr_options)
+    match_value = value(expr_sbvalue)
+    heap_regions = []
+
+    # Populate heap regions from expression result.
+    if expr_sbvalue.error.Success():
+        for count in range(MAX_MATCHES):
+            match_entry = match_value[count]
+            lo_addr = match_entry.lo_addr.sbvalue.unsigned
+            hi_addr = match_entry.hi_addr.sbvalue.unsigned
+            if lo_addr != 0:
+                heap_regions.append((lo_addr, hi_addr))
+    else:
+        # Fallback to default way to calculate heap regions in error condition.
+        heap_regions = None
+
+    return heap_regions

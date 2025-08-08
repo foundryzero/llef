@@ -1,12 +1,14 @@
 """Global settings module"""
+
 import os
 
-from arch import supported_arch
-from common.singleton import Singleton
-from common.base_settings import BaseLLEFSettings
-from common.util import change_use_color, output_line
-
 from lldb import SBDebugger
+
+from arch import supported_arch
+from common.base_settings import BaseLLEFSettings
+from common.constants import MSG_TYPE
+from common.output_util import output_line, print_message
+from common.singleton import Singleton
 
 
 class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
@@ -14,8 +16,9 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     Global general settings class - loaded from file defined in `LLEF_CONFIG_PATH`
     """
 
-    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef")
+    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".llef")
     GLOBAL_SECTION = "LLEF"
+    DEFAUL_OUTPUT_ORDER = "registers,stack,code,threads,trace"
     debugger: SBDebugger = None
 
     @property
@@ -70,6 +73,32 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     def show_all_registers(self):
         return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_all_registers", fallback=False)
 
+    @property
+    def output_order(self):
+        return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "output_order", fallback=self.DEFAUL_OUTPUT_ORDER)
+
+    @property
+    def truncate_output(self):
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "truncate_output", fallback=True)
+
+    @property
+    def enable_darwin_heap_scan(self):
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "enable_darwin_heap_scan", fallback=False)
+
+    def validate_output_order(self, value: str):
+        default_sections = self.DEFAUL_OUTPUT_ORDER.split(",")
+        sections = value.split(",")
+        if len(sections) != len(default_sections):
+            raise ValueError(f"Requires {len(default_sections)} elements: '{','.join(default_sections)}'")
+
+        missing_sections = []
+        for section in default_sections:
+            if section not in sections:
+                missing_sections.append(section)
+
+        if len(missing_sections) > 0:
+            raise ValueError(f"Missing '{','.join(missing_sections)}' from output order.")
+
     def validate_settings(self, setting=None) -> bool:
         """
         Validate settings by attempting to retrieve all properties thus executing any ConfigParser coverters
@@ -92,12 +121,13 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
                     and self.debugger is not None
                     and self.debugger.GetUseColor() is False
                 ):
-                    print("Colour is not supported by your terminal")
-                    raise ValueError
-            except ValueError:
+                    raise ValueError("Colour is not supported by your terminal")
+
+                elif setting_name == "output_order":
+                    self.validate_output_order(value)
+            except ValueError as e:
                 valid = False
-                raw_value = self._RAW_CONFIG.get(self.GLOBAL_SECTION, setting_name)
-                output_line(f"Error parsing setting {setting_name}. Invalid value '{raw_value}'")
+                print_message(MSG_TYPE.ERROR, f"Invalid value for {setting_name}. {e}")
         return valid
 
     def __init__(self, debugger: SBDebugger):
@@ -108,8 +138,11 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
         super().set(setting, value)
 
         if setting == "color_output":
-            change_use_color(self.color_output)
+            self.state.change_use_color(self.color_output)
+        elif setting == "truncate_output":
+            self.state.change_truncate_output(self.truncate_output)
 
     def load(self, reset=False):
         super().load(reset)
-        change_use_color(self.color_output)
+        self.state.change_use_color(self.color_output)
+        self.state.change_truncate_output(self.truncate_output)

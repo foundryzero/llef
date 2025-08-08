@@ -1,13 +1,14 @@
 """Base settings command class."""
+
 import argparse
 import shlex
-from typing import Any, Dict
 from abc import ABC, abstractmethod
+from typing import Any, Dict
 
 from lldb import SBCommandReturnObject, SBDebugger, SBExecutionContext
 
 from commands.base_command import BaseCommand
-from common.util import output_line
+from common.output_util import output_line
 
 
 class BaseSettingsCommand(BaseCommand, ABC):

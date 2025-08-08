@@ -1,17 +1,20 @@
 """A base class for global settings"""
+
 import configparser
 import os
-
 from abc import abstractmethod
+
+from common.output_util import output_line
 from common.singleton import Singleton
-from common.util import output_line
+from common.state import LLEFState
 
 
 class BaseLLEFSettings(metaclass=Singleton):
     """
     Global settings class - loaded from file defined in `LLEF_CONFIG_PATH`
     """
-    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser('~'), ".llef")
+
+    LLEF_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".llef")
     GLOBAL_SECTION = "LLEF"
 
     _RAW_CONFIG: configparser.ConfigParser = configparser.ConfigParser()
@@ -21,6 +24,7 @@ class BaseLLEFSettings(metaclass=Singleton):
         return [name for name, value in vars(cls).items() if isinstance(value, property)]
 
     def __init__(self):
+        self.state = LLEFState()
         self.load()
 
     @abstractmethod

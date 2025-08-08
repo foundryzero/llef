@@ -12,8 +12,8 @@ from commands.base_command import BaseCommand
 from commands.base_container import BaseContainer
 from common.constants import MSG_TYPE, TERM_COLORS
 from common.de_bruijn import generate_cyclic_pattern
+from common.output_util import output_line, print_message
 from common.state import LLEFState
-from common.util import print_message, output_line
 
 
 class PatternContainer(BaseContainer):
@@ -82,9 +82,7 @@ class PatternCreateCommand(BaseCommand):
         args = self.parser.parse_args(shlex.split(command))
         length = args.length
         num_chars = args.cycle_length or 4  # Hardcoded default value.
-        print_message(
-            MSG_TYPE.INFO, f"Generating a pattern of {length} bytes (n={num_chars})"
-        )
+        print_message(MSG_TYPE.INFO, f"Generating a pattern of {length} bytes (n={num_chars})")
         pattern = generate_cyclic_pattern(length, num_chars)
         output_line(pattern.decode("utf-8"))
 
@@ -94,9 +92,7 @@ class PatternCreateCommand(BaseCommand):
                 "Created pattern cannot be stored in a convenience variable as there is no running process",
             )
         else:
-            value = exe_ctx.GetTarget().EvaluateExpression(
-                f'"{pattern.decode("utf-8")}"'
-            )
+            value = exe_ctx.GetTarget().EvaluateExpression(f'"{pattern.decode("utf-8")}"')
             print_message(
                 MSG_TYPE.INFO,
                 f"Pattern saved in variable: {TERM_COLORS.RED.value}{value.GetName()}{TERM_COLORS.ENDC.value}",

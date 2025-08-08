@@ -1,13 +1,8 @@
 """Break point handler."""
+
 from typing import Any, Dict
 
-from lldb import (
-    SBDebugger,
-    SBExecutionContext,
-    SBStream,
-    SBStructuredData,
-    SBTarget,
-)
+from lldb import SBDebugger, SBExecutionContext, SBStream, SBStructuredData, SBTarget
 
 from common.context_handler import ContextHandler
 
@@ -24,9 +19,7 @@ class StopHookHandler:
         command = f"target stop-hook add -P {module_name}.{cls.__name__}"
         debugger.HandleCommand(command)
 
-    def __init__(
-        self, target: SBTarget, _: SBStructuredData, __: Dict[Any, Any]
-    ) -> None:
+    def __init__(self, target: SBTarget, _: SBStructuredData, __: Dict[Any, Any]) -> None:
         """
         For up to date documentation on args provided to this function run: `help target stop-hook add`
         """

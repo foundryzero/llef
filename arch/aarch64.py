@@ -68,6 +68,4 @@ class Aarch64(BaseArch):
         "m": 0xF,
     }
 
-    flag_registers = [
-        FlagRegister("cpsr", _cpsr_register_bit_masks)
-    ]
+    flag_registers = [FlagRegister("cpsr", _cpsr_register_bit_masks)]
