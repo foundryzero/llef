@@ -2,6 +2,10 @@
 
 from enum import Enum, IntEnum
 
+# Pointers are stored using int, however, this can lead to confusion between an offset, an absolute address,
+# and just a plain old integer value. The llef_pointer alias is intended to improve readability.
+pointer = int
+
 
 class TERM_COLORS(Enum):
     """Used to colorify terminal output."""

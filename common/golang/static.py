@@ -6,7 +6,7 @@ from typing import Iterator, Union
 
 from lldb import SBData, SBError, SBModule, SBProcess, SBTarget, eByteOrderLittle
 
-from common.constants import MSG_TYPE
+from common.constants import MSG_TYPE, pointer
 from common.golang.constants import GO_MAGICS, GO_NOPTRDATA_NAMES, GO_PCLNTAB_NAMES
 from common.golang.interfaces import ModuleDataInfo
 from common.golang.moduledata_parser import ModuleDataParser
@@ -85,7 +85,7 @@ def parse_moduledata(
                     if start % LLEFState.go_state.pclntab_info.ptr_size != 0:
                         continue
 
-                    mdp = ModuleDataParser(noptrdata.GetFileAddress(), start)
+                    mdp = ModuleDataParser(start)
                     md_info = mdp.parse(proc, data, target)
                     # If parsing successful, while-loop will terminate, then for-loop will break.
 
@@ -103,7 +103,7 @@ class CandidatePCLnTab:
 
     buffer: SBData
     file_address: int
-    load_address: int
+    load_address: pointer
 
 
 def pclntab_candidates(module: SBModule, target: SBTarget, settings: LLEFSettings) -> Iterator[CandidatePCLnTab]:
@@ -217,7 +217,7 @@ def setup_go(proc: SBProcess, target: SBTarget, settings: LLEFSettings) -> None:
     """
     LLEFState.go_state.analysed = True
 
-    # As noted elsewhere in LLEF, the executable has always been observed at module 0.
+    # The executable has always been observed at module 0.
     module = target.GetModuleAtIndex(0)
 
     if module.IsValid():
@@ -228,6 +228,7 @@ def setup_go(proc: SBProcess, target: SBTarget, settings: LLEFSettings) -> None:
                 LLEFState.go_state.moduledata_info = parse_moduledata(proc, module, target, candidate.file_address)
                 if LLEFState.go_state.moduledata_info is not None:
                     print_message(MSG_TYPE.SUCCESS, "Type information found.")
+
                 else:
                     print_message(MSG_TYPE.ERROR, "No type information available.")
                 break

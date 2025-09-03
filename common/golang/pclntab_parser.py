@@ -6,6 +6,7 @@ from typing import Any, Union
 
 from lldb import SBData, SBError, SBProcess, SBTarget
 
+from common.constants import pointer
 from common.golang.constants import GO_MAGIC_2_TO_15, GO_MAGIC_16_TO_17, GO_MAGIC_18_TO_19, GO_MAGIC_20_TO_24
 from common.golang.interfaces import GoFunc, PCLnTabInfo
 from common.golang.util_stateless import file_to_load_address, read_varint
@@ -62,12 +63,22 @@ class PCLnTabParser:
 
     # State to be returned after parsing:
     max_pc_file: int
-    func_mapping: list[tuple[int, GoFunc]]
+    func_mapping: list[tuple[pointer, GoFunc]]
     version_bounds: tuple[int, int]
 
-    def __init__(self, base: int, magic: int, pad: int, min_instr_size: int, ptr_size: int) -> None:
+    def __init__(self, pclntab_base: int, magic: int, pad: int, min_instr_size: int, ptr_size: int) -> None:
+        """Initialise the PCLnTabParser, set up internal state ready for parsing.
+
+        Args:
+            pclntab_base (int): Offset into the binary file of the PcLnTab section.
+            magic (int): Go-version specific magic bytes for PcLnTab section.
+            pad (int): Number of padding bytes (found in the PcLnTab header).
+            min_instr_size (int): Bytes for minimum instruction size.
+            ptr_size (int): Size of pointers in bytes.
+        """
+
         # Assumes a little-endian format, since LLEF only supports LE architectures for now.
-        self.base = base
+        self.base = pclntab_base
         self.magic = magic
         self.pad = pad
         self.min_instr_size = min_instr_size
@@ -75,6 +86,7 @@ class PCLnTabParser:
 
         self.__unnamed_ctr = itertools.count()
 
+        # Check that values provided in PcLnTab header are sensible.
         self.valid = self.pad == 0 and self.min_instr_size in (1, 2, 4) and self.ptr_size in (4, 8)
         self.func_mapping = []
 
@@ -134,14 +146,14 @@ class PCLnTabParser:
         return pairs
 
     def add_func(
-        self, proc: SBProcess, target: SBTarget, entry: int, nameptr: int, stack_deltas: list[tuple[int, int]]
+        self, proc: SBProcess, target: SBTarget, static_entry: int, nameptr: int, stack_deltas: list[tuple[int, int]]
     ) -> None:
         """
         Add a single GoFunc entry to state by reading a string from memory.
 
         :param SBProcess proc: The process object currently being debugged.
         :param SBTarget target: The target associated with the process. Used for resolving file->load addresses.
-        :param int entry: The file address for the entrypoint of the function we wish to add.
+        :param int static_entry: The file address for the entrypoint of the function we wish to add.
         :param int nameptr: A pointer to the string in memory, to use as the function name.
         :param list[tuple[int, int]] stack_deltas: The list of stack deltas to pass to the GoFunc.
         """
@@ -150,10 +162,10 @@ class PCLnTabParser:
         if err.Fail():
             name = f"Unnamed_{next(self.__unnamed_ctr)}"
 
-        record = GoFunc(name=name, file_addr=entry, stack_deltas=stack_deltas)
+        record = GoFunc(name=name, file_addr=static_entry, stack_deltas=stack_deltas)
 
-        mem_entry = file_to_load_address(target, entry)
-        self.func_mapping.append((mem_entry, record))
+        runtime_entry = file_to_load_address(target, static_entry)
+        self.func_mapping.append((runtime_entry, record))
 
     def make_func_map_18to24(self, proc: SBProcess, target: SBTarget, buf: SBData) -> bool:
         """
@@ -351,7 +363,7 @@ class PCLnTabParser:
                 self.version_bounds = self.differentiate_versions()
                 return PCLnTabInfo(
                     max_pc_file=self.max_pc_file,
-                    max_pc_load=file_to_load_address(target, self.max_pc_file),
+                    max_pc_runtime=file_to_load_address(target, self.max_pc_file),
                     func_mapping=self.func_mapping,
                     version_bounds=self.version_bounds,
                     ptr_size=self.ptr_size,

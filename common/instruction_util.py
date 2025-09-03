@@ -4,8 +4,8 @@ from re import Match
 from lldb import SBAddress, SBInstruction, SBTarget
 
 from common.color_settings import LLEFColorSettings
-from common.golang.improvements import go_improve_instruction_comment
-from common.golang.util import perform_go_functions
+from common.golang.analysis import go_annotate_jumps
+from common.golang.util import go_context_analysis
 from common.output_util import color_string, output_line
 from common.settings import LLEFSettings
 
@@ -100,8 +100,8 @@ def print_instruction(
     comment = instruction.GetComment(target) or ""
 
     ops_width = len(operands)  # visible length, for spacing (before colouring)
-    if perform_go_functions(settings):
-        comment = go_improve_instruction_comment(target, instruction, lldb_frame_start, comment)
+    if go_context_analysis(settings):
+        comment = go_annotate_jumps(target, instruction, lldb_frame_start, comment)
 
     if not highlight:
         operands = color_operands(operands, color_settings)

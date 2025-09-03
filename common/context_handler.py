@@ -14,14 +14,20 @@ from lldb import (
     SBTarget,
     SBThread,
     SBValue,
+    debugger,
 )
 
 from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
 from common.color_settings import LLEFColorSettings
 from common.constants import GLYPHS, TERM_COLORS
-from common.golang.improvements import go_improve_backtrace, go_improve_function, go_improve_pointer_line, go_stop_hook
-from common.golang.util import addr_is_go_fp, perform_go_functions
+from common.golang.analysis import (
+    go_annotate_pointer_line,
+    go_get_backtrace,
+    go_get_function_from_pc,
+    go_stop_hook,
+)
+from common.golang.util import go_context_analysis, is_address_go_frame_pointer
 from common.instruction_util import extract_instructions, print_instruction, print_instructions
 from common.output_util import (
     clear_page,
@@ -40,7 +46,7 @@ from common.util import (
     find_stack_regions,
     get_frame_arguments,
     get_frame_range,
-    get_funcinfo_from_frame,
+    get_function_info_from_frame,
     get_registers,
     hex_or_str,
     is_code,
@@ -92,8 +98,9 @@ class ContextHandler:
         line = ""
         pointer_value = SBAddress(pointer, self.target)
 
-        if perform_go_functions(self.settings):
-            line = go_improve_pointer_line(
+        # Check if LLEF can perform Go-specific analysis.
+        if go_context_analysis(self.settings):
+            line = go_annotate_pointer_line(
                 self.process,
                 self.target,
                 self.regions,
@@ -103,17 +110,17 @@ class ContextHandler:
                 self.color_settings,
             )
 
+        # Perform generic analysis if there is no Go analysis string.
         if line == "":
-            # Fall back to generic annotations if language-specific annotation yielded nothing.
             if pointer_value.symbol.IsValid():
                 offset = pointer_value.offset - pointer_value.symbol.GetStartAddress().offset
-                rebased = generate_rebased_address_string(
+                rebased_address = generate_rebased_address_string(
                     pointer_value,
                     self.settings.rebase_addresses,
                     self.settings.rebase_offset,
                     self.color_settings.rebased_address_color,
                 )
-                line += f" {rebased} {GLYPHS.RIGHT_ARROW.value}"
+                line += f" {rebased_address} {GLYPHS.RIGHT_ARROW.value}"
                 line += color_string(
                     f"<{pointer_value.symbol.name}+{offset}>", self.color_settings.dereferenced_value_color
                 )
@@ -126,7 +133,7 @@ class ContextHandler:
                 # Only add this to the line if all characters in referenced_string are printable.
                 referenced_string = referenced_string.replace("\n", " ")
                 line += color_string(
-                    referenced_string, self.color_settings.string_color, f' {GLYPHS.RIGHT_ARROW.value} ("', "?)"
+                    referenced_string, self.color_settings.string_color, f' {GLYPHS.RIGHT_ARROW.value} ("', '"?)'
                 )
 
         if address_containing_pointer is not None:
@@ -135,14 +142,13 @@ class ContextHandler:
                 if register.GetValueAsUnsigned() == address_containing_pointer:
                     registers_pointing_to_address.append(f"${register.GetName()}")
 
-            if addr_is_go_fp(self.settings, address_containing_pointer, self.frame):
+            if is_address_go_frame_pointer(self.settings, address_containing_pointer, self.frame):
                 registers_pointing_to_address.append("(Go Frame Pointer)")
             if len(registers_pointing_to_address) > 0:
                 reg_list = ", ".join(registers_pointing_to_address)
                 line += color_string(
                     f"{GLYPHS.LEFT_ARROW.value}{reg_list}", self.color_settings.dereferenced_register_color
                 )
-
         return line
 
     def print_stack_addr(self, addr: int, offset: int) -> None:
@@ -157,16 +163,14 @@ class ContextHandler:
 
         # Add value to line
         ptr_bits = self.arch().bits
-        err = SBError()
-        if addr >= 0 and addr + (ptr_bits // 8) <= 1 << ptr_bits:
+        max_valid_address = pow(2, ptr_bits)
+
+        if addr >= 0 and addr <= max_valid_address:
+            err = SBError()
             stack_value = self.process.ReadPointerFromMemory(addr, err)
             if err.Success():
                 line += f"0x{stack_value:0{ptr_bits // 4}x}"
                 line += self.generate_printable_line_from_pointer(stack_value, addr)
-
-        # Rapidly stepping through programs may cause either of the above if statements to become False.
-        # This is due to LLDB asynchronicity - race conditions cause it to give up on returning accurate information.
-        # So leave the right-hand portion of the line blank rather than displaying a misleading error.
 
         output_line(line)
 
@@ -310,9 +314,9 @@ class ContextHandler:
             register_list = self.arch().gpr_registers
 
         for reg in register_list:
-            reg_val = self.frame.register[reg]
-            if reg_val is not None:
-                self.print_register(reg_val)
+            register_value = self.frame.register[reg]
+            if register_value is not None:
+                self.print_register(register_value)
         for flag_register in self.arch().flag_registers:
             if self.frame.register[flag_register.name] is not None:
                 self.print_flags_register(flag_register)
@@ -349,9 +353,9 @@ class ContextHandler:
         frame_start_address, frame_end_address = get_frame_range(self.frame, self.target)
         function_start = frame_start_address
 
-        if perform_go_functions(self.settings):
-            # We may be able to find a better frame start and symbol name by examining PCLNTAB.
-            function_start, function_name = go_improve_function(pc, function_start, function_name)
+        if go_context_analysis(self.settings):
+            # Attempt to find a frame start and function name in Go PCLNTAB table.
+            function_start, function_name = go_get_function_from_pc(pc, function_start, function_name)
 
         output_line(f"{filename}'{function_name}:")
 
@@ -365,15 +369,19 @@ class ContextHandler:
             self.color_settings,
         )
 
-        num_post = self.settings.max_disassembly_length - len(pre_instructions)
+        max_post_instructions = self.settings.max_disassembly_length - len(pre_instructions)
 
-        # optimisation: only disassemble as far as we could possibly display
-        frame_end_address = min(frame_end_address, pc + num_post * self.arch().max_instr_size + 1)
+        # Limit disassembly length to prevent issues with very large functions.
+        max_disassembly_end_address = pc + (max_post_instructions * self.arch().max_instr_size) + 1
+        disassembly_end_address = min(frame_end_address, max_disassembly_end_address)
 
-        post_instructions = extract_instructions(self.target, pc, frame_end_address, self.state.disassembly_syntax)
+        post_instructions = extract_instructions(
+            self.target, pc, disassembly_end_address, self.state.disassembly_syntax
+        )
 
         if len(post_instructions) > 0:
             pc_instruction = post_instructions[0]
+            # Print instruction at program counter (with highlighting).
             print_instruction(
                 self.target,
                 pc_instruction,
@@ -384,9 +392,10 @@ class ContextHandler:
                 True,
             )
 
+            # Print remaining instructions.
             print_instructions(
                 self.target,
-                post_instructions[1:num_post],
+                post_instructions[1:max_post_instructions],
                 frame_start_address,
                 function_start,
                 self.settings,
@@ -401,16 +410,14 @@ class ContextHandler:
             string_color=self.color_settings.section_header_color,
         )
         for thread in self.process:
-            # This is roughly equivalent to str(thread). We manually generate it in order to patch fields if needed.
-
             if not thread.IsValid():
                 continue
 
             frame = thread.GetFrameAtIndex(0)
-            if frame is None or not frame.IsValid():  # can happen if the user holds down step
+            if frame is None or not frame.IsValid():
                 continue
 
-            func_name, func_off = get_funcinfo_from_frame(self.settings, self.target, frame)
+            function_name, func_offset = get_function_info_from_frame(self.settings, self.target, frame)
 
             base_name = ""
             module = frame.GetModule()
@@ -421,7 +428,7 @@ class ContextHandler:
 
             line = (
                 f"thread #{thread.idx}: tid = {thread.id}, {hex_or_str(frame.pc)} "
-                f"{base_name}`{func_name} + {func_off}"
+                f"{base_name}`{function_name} + {func_offset}"
             )
             if thread.name:
                 line += f""", name = {color_string("'" + thread.name + "'", "GREEN")}"""
@@ -443,38 +450,40 @@ class ContextHandler:
         )
         length = self.settings.max_trace_length
 
-        if perform_go_functions(self.settings):
-            go_bt = go_improve_backtrace(self.process, self.frame, self.arch, self.color_settings, length)
-            if go_bt is not None:
-                output_line(go_bt)
-                return
+        line = ""
+        if go_context_analysis(self.settings):
+            go_backtrace = go_get_backtrace(self.process, self.frame, self.arch, self.color_settings, length)
+            if go_backtrace is not None:
+                line = go_backtrace
 
-        for i in range(min(self.thread.GetNumFrames(), length)):
-            if i == 0:
-                number_color = self.color_settings.highlighted_index_color
-            else:
-                number_color = self.color_settings.index_color
-            line = color_string(f"#{i}", number_color, "[", "]")
+        # Fallback to generic stack unwind.
+        if line == "":
+            for i in range(min(self.thread.GetNumFrames(), length)):
+                if i == 0:
+                    number_color = self.color_settings.highlighted_index_color
+                else:
+                    number_color = self.color_settings.index_color
+                line = color_string(f"#{i}", number_color, "[", "]")
 
-            current_frame = self.thread.GetFrameAtIndex(i)
-            pc_address = current_frame.GetPCAddress()
-            trace_address = pc_address.GetLoadAddress(self.target)
+                current_frame = self.thread.GetFrameAtIndex(i)
+                pc_address = current_frame.GetPCAddress()
+                trace_address = pc_address.GetLoadAddress(self.target)
 
-            name, _ = get_funcinfo_from_frame(self.settings, self.target, current_frame)
-            rebased = generate_rebased_address_string(
-                pc_address,
-                self.settings.rebase_addresses,
-                self.settings.rebase_offset,
-                self.color_settings.rebased_address_color,
-            )
-            line += f"{trace_address:#x}{rebased}  {GLYPHS.RIGHT_ARROW.value} "
-            line += f"{color_string(name, self.color_settings.function_name_color)}"
+                function_name, _ = get_function_info_from_frame(self.settings, self.target, current_frame)
+                rebased_address = generate_rebased_address_string(
+                    pc_address,
+                    self.settings.rebase_addresses,
+                    self.settings.rebase_offset,
+                    self.color_settings.rebased_address_color,
+                )
+                line += f"{trace_address:#x}{rebased_address}  {GLYPHS.RIGHT_ARROW.value} "
+                line += f"{color_string(function_name, self.color_settings.function_name_color)}"
 
-            line += get_frame_arguments(
-                current_frame, frame_argument_name_color=TERM_COLORS[self.color_settings.frame_argument_name_color]
-            )
+                line += get_frame_arguments(
+                    current_frame, frame_argument_name_color=TERM_COLORS[self.color_settings.frame_argument_name_color]
+                )
 
-            output_line(line)
+        output_line(line)
 
     def load_disassembly_syntax(self, debugger: SBDebugger) -> None:
         """Load the disassembly flavour from LLDB into LLEF's state."""
@@ -520,7 +529,8 @@ class ContextHandler:
                 # scanning method to be used.
                 self.darwin_heap_regions = None
 
-        go_stop_hook(exe_ctx, self.arch(), self.settings)
+        if self.settings.go_support_level != "disable":
+            go_stop_hook(exe_ctx, self.arch(), self.settings, debugger)
 
     def display_context(self, exe_ctx: SBExecutionContext, update_registers: bool) -> None:
         """For up to date documentation on args provided to this function run: `help target stop-hook add`"""

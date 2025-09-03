@@ -2,7 +2,7 @@
 
 from typing import Union
 
-from common.golang.constants import GO_TUNE_STRING_GUESS_CAPACITY, GO_TUNE_TYPE_GUESS_CAPACITY
+from common.golang.constants import GO_STRING_GUESS_CAPACITY, GO_TYPE_GUESS_CAPACITY
 from common.golang.interfaces import ModuleDataInfo, PCLnTabInfo
 from common.golang.util_stateless import LeastRecentlyAddedDictionary
 
@@ -30,6 +30,6 @@ class GoState:
         self.is_go_binary = False
         self.analysed = False
         self.moduledata_info = None
-        self.type_guesses = LeastRecentlyAddedDictionary(capacity=GO_TUNE_TYPE_GUESS_CAPACITY)
-        self.string_guesses = LeastRecentlyAddedDictionary(capacity=GO_TUNE_STRING_GUESS_CAPACITY)
+        self.type_guesses = LeastRecentlyAddedDictionary(capacity=GO_TYPE_GUESS_CAPACITY)
+        self.string_guesses = LeastRecentlyAddedDictionary(capacity=GO_STRING_GUESS_CAPACITY)
         self.prev_func = 0
