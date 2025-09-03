@@ -17,11 +17,8 @@ class X86_64(BaseArch):
         "rbx",
         "rcx",
         "rdx",
-        "rsp",
-        "rbp",
-        "rsi",
         "rdi",
-        "rip",
+        "rsi",
         "r8",
         "r9",
         "r10",
@@ -30,6 +27,9 @@ class X86_64(BaseArch):
         "r13",
         "r14",
         "r15",
+        "rsp",
+        "rbp",
+        "rip",
     ]
 
     gpr_key = "general purpose"

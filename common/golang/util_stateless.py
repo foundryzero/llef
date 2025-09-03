@@ -7,16 +7,18 @@ from typing import Any, Iterator, Union
 
 from lldb import UINT32_MAX, SBTarget
 
+from common.constants import pointer
 
-def file_to_load_address(target: SBTarget, addr: int) -> int:
+
+def file_to_load_address(target: SBTarget, static_address: int) -> pointer:
     """
     Converts an in-file address into an in-memory address.
 
     :param SBTarget target: The target associated with the current process.
-    :param int addr: The address as described in the binary.
+    :param int static_address: The address as described in the binary.
     :return int: The corresponding address as it has been mapped in memory.
     """
-    return target.ResolveFileAddress(addr).GetLoadAddress(target)
+    return target.ResolveFileAddress(static_address).GetLoadAddress(target)
 
 
 def read_varint(bytebuf: Any, offset: int) -> tuple[int, int]:

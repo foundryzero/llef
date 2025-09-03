@@ -73,12 +73,12 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 | rebase_addresses        | Boolean | Enable/disable address rebase output               |
 | rebase_offset           | Int     | Set the rebase offset (default 0x100000)           |
 | show_all_registers      | Boolean | Enable/disable extended register output            |
-| enable_darwin_heap_scan | Boolean | Enable/disable more accurate heap scanning for Darwin-based platforms. Uses the Darwin malloc introspection API, executing code in the address space of the target application using LLDB's evaluation engine. |
+| enable_darwin_heap_scan | Boolean | Enable/disable more accurate heap scanning for Darwin-based platforms. Uses the Darwin malloc introspection API, executing code in the address space of the target application using LLDB's evaluation engine |
 | max_trace_length        | Int     | Set the maximum length of the call stack backtrace to display                                        |
 | stack_view_size         | Int     | Set the number of entries in the stack read to display                                               |
 | max_disassembly_length  | Int     | Set the maximum number of instructions to disassemble and display around the current PC              |
-| go_support_level        | String  | Control Golang-specific analysis. `disable` / `auto` (default) / `force`. Go support in Windows binaries requires `force`. |
-| go_confidence_threshold | String  | Set the confidence threshold (`low` / `medium` / `high`) for Go objects to be shown in the context view. |
+| go_support_level        | String  | Control Golang-specific analysis. `disable` / `auto` (default) / `force`. For performance reasons, Go support in Windows binaries requires `force`. |
+| go_confidence_threshold | String  | Set the confidence threshold (`low` / `medium` / `high`) for Go objects to be shown in the context view |
 
 #### llefcolorsettings
 Allows setting LLEF GUI colors:
@@ -116,6 +116,7 @@ Supported colors: BLUE, GREEN, YELLOW, RED, PINK, CYAN, GREY
 | dereferenced_register_color   |
 | frame_argument_name_color     |
 | read_memory_address_color     |
+| go_type_color                 |
 
 #### Hexdump
 View memory contents with:

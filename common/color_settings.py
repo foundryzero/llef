@@ -98,6 +98,10 @@ class LLEFColorSettings(BaseLLEFSettings, metaclass=Singleton):
     def address_operand_color(self) -> str:
         return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "address_operand_color", fallback="RED").upper()
 
+    @property
+    def go_type_color(self) -> str:
+        return self._RAW_CONFIG.get(self.GLOBAL_SECTION, "go_type_color", fallback="CYAN").upper()
+
     def __init__(self) -> None:
         self.supported_colors = [color.name for color in TERM_COLORS]
         self.supported_colors.remove(TERM_COLORS.ENDC.name)

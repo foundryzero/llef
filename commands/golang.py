@@ -11,14 +11,14 @@ from commands.base_command import BaseCommand
 from commands.base_container import BaseContainer
 from common.constants import MSG_TYPE
 from common.context_handler import ContextHandler
-from common.golang.constants import GO_TUNE_DEFAULT_UNPACK_DEPTH
+from common.golang.analysis import go_get_backtrace
+from common.golang.constants import GO_DEFAULT_UNPACK_DEPTH
 from common.golang.data import GoDataBad
-from common.golang.improvements import go_improve_backtrace
 from common.golang.state import GoState
 from common.golang.static import setup_go
 from common.golang.type_getter import TypeGetter
 from common.golang.types import ExtractInfo
-from common.golang.util import go_calculate_bp, go_find_func, perform_go_functions
+from common.golang.util import go_calculate_base_pointer, go_context_analysis, go_find_func
 from common.output_util import output_line, print_message
 from common.settings import LLEFSettings
 from common.state import LLEFState
@@ -103,7 +103,7 @@ class GolangFindFuncCommand(BaseCommand):
 
         if self.settings.go_support_level == "disable":
             print_message(MSG_TYPE.ERROR, GO_DISABLED_MSG)
-        elif not perform_go_functions(self.settings):
+        elif not go_context_analysis(self.settings):
             print_message(MSG_TYPE.ERROR, "The binary does not appear to be a Go binary.")
         else:
 
@@ -117,9 +117,9 @@ class GolangFindFuncCommand(BaseCommand):
                 try:
                     # User has typed in a numeric address
                     address = int(address_or_name, 0)
-                    record = go_find_func(address)
-                    if record is not None:
-                        (entry, gofunc) = record
+                    function_mapping = go_find_func(address)
+                    if function_mapping is not None:
+                        (entry, gofunc) = function_mapping
                         output_line(f"{hex(entry)} - {gofunc.name} (file address = {hex(gofunc.file_addr)})")
                     else:
                         print_message(MSG_TYPE.ERROR, f"Could not find function containing address {hex(address)}")
@@ -129,9 +129,9 @@ class GolangFindFuncCommand(BaseCommand):
                     name = address_or_name
 
                     success = False
-                    for entry, f in LLEFState.go_state.pclntab_info.func_mapping:
-                        if f.name == name:
-                            output_line(f"{hex(entry)} - {name} (file address = {hex(f.file_addr)})")
+                    for entry, gofunc in LLEFState.go_state.pclntab_info.func_mapping:
+                        if name in gofunc.name:
+                            output_line(f"{hex(entry)} - {gofunc.name} (file address = {hex(gofunc.file_addr)})")
                             success = True
                             # Don't break: there are potentially multiple matches.
 
@@ -164,8 +164,8 @@ class GolangGetTypeCommand(BaseCommand):
             "-d",
             "--depth",
             type=positive_int,
-            default=GO_TUNE_DEFAULT_UNPACK_DEPTH,
-            help=f"Depth to unpack child types, default is {GO_TUNE_DEFAULT_UNPACK_DEPTH}",
+            default=GO_DEFAULT_UNPACK_DEPTH,
+            help=f"Depth to unpack child types, default is {GO_DEFAULT_UNPACK_DEPTH}",
         )
 
         return parser
@@ -184,7 +184,7 @@ class GolangGetTypeCommand(BaseCommand):
             + "If not given an argument, prints a table of all known types."
             + os.linesep
             + "The depth argument specifies how deeply to follow and unpack child types. "
-            + f"It defaults to {GO_TUNE_DEFAULT_UNPACK_DEPTH}"
+            + f"It defaults to {GO_DEFAULT_UNPACK_DEPTH}"
             + os.linesep
             + GolangGetTypeCommand.get_command_parser().format_help()
         )
@@ -214,7 +214,7 @@ class GolangGetTypeCommand(BaseCommand):
 
         if self.settings.go_support_level == "disable":
             print_message(MSG_TYPE.ERROR, GO_DISABLED_MSG)
-        elif not perform_go_functions(self.settings):
+        elif not go_context_analysis(self.settings):
             print_message(MSG_TYPE.ERROR, "The binary does not appear to be a Go binary.")
         elif LLEFState.go_state.moduledata_info is None:
             print_message(MSG_TYPE.ERROR, "No type information available in this Go binary.")
@@ -257,6 +257,14 @@ class GolangGetTypeCommand(BaseCommand):
                     else:
                         print_message(MSG_TYPE.ERROR, f"Could not parse type '{name}'")
 
+                        found = False
+                        for ptr, type_struct in LLEFState.go_state.moduledata_info.type_structs.items():
+                            if name in type_struct.header.name:
+                                if found is False:
+                                    print_message(MSG_TYPE.ERROR, "Did you mean:")
+                                    found = True
+                                output_line(f"{hex(ptr)} - {type_struct.header.name}")
+
 
 class GolangUnpackTypeCommand(BaseCommand):
     """Implements the 'unpack-type' subcommand"""
@@ -286,8 +294,8 @@ class GolangUnpackTypeCommand(BaseCommand):
             "-d",
             "--depth",
             type=positive_int,
-            default=GO_TUNE_DEFAULT_UNPACK_DEPTH,
-            help=f"Depth to unpack child objects, default is {GO_TUNE_DEFAULT_UNPACK_DEPTH}",
+            default=GO_DEFAULT_UNPACK_DEPTH,
+            help=f"Depth to unpack child objects, default is {GO_DEFAULT_UNPACK_DEPTH}",
         )
         return parser
 
@@ -303,7 +311,7 @@ class GolangUnpackTypeCommand(BaseCommand):
             + "The type can either be a string or a pointer to a type information structure."
             + os.linesep
             + "The depth argument specifies how deeply to follow and unpack child objects. "
-            + f"It defaults to {GO_TUNE_DEFAULT_UNPACK_DEPTH}"
+            + f"It defaults to {GO_DEFAULT_UNPACK_DEPTH}"
             + os.linesep
             + GolangUnpackTypeCommand.get_command_parser().format_help()
         )
@@ -334,7 +342,7 @@ class GolangUnpackTypeCommand(BaseCommand):
 
         if self.settings.go_support_level == "disable":
             print_message(MSG_TYPE.ERROR, GO_DISABLED_MSG)
-        elif not perform_go_functions(self.settings):
+        elif not go_context_analysis(self.settings):
             print_message(MSG_TYPE.ERROR, "The binary does not appear to be a Go binary.")
         elif LLEFState.go_state.moduledata_info is None:
             print_message(MSG_TYPE.ERROR, "No type information available in this Go binary.")
@@ -438,22 +446,25 @@ class GolangBacktraceCommand(BaseCommand):
 
         if self.settings.go_support_level == "disable":
             print_message(MSG_TYPE.ERROR, GO_DISABLED_MSG)
-        elif not perform_go_functions(self.settings):
+        elif not go_context_analysis(self.settings):
             print_message(MSG_TYPE.ERROR, "The binary does not appear to be a Go binary.")
         else:
             # At this point, we're good to go with running the command.
 
-            bt = go_improve_backtrace(
+            backtrace = go_get_backtrace(
                 exe_ctx.GetProcess(),
                 exe_ctx.GetFrame(),
                 self.context_handler.arch,
                 self.context_handler.color_settings,
                 depth,
             )
-            if bt is not None:
-                output_line(bt)
+            if backtrace is not None:
+                output_line(backtrace)
             else:
-                print_message(MSG_TYPE.ERROR, "Go traceback failed. Try using LLDB's `bt` command.")
+                print_message(
+                    MSG_TYPE.ERROR,
+                    "Go traceback failed (only supported on x86 and x86_64). Try using LLDB's `bt` command.",
+                )
 
 
 class GolangReanalyseCommand(BaseCommand):
@@ -511,5 +522,5 @@ class GolangReanalyseCommand(BaseCommand):
         else:
             LLEFState.go_state = GoState()
             setup_go(exe_ctx.GetProcess(), exe_ctx.GetTarget(), self.settings)
-            go_calculate_bp.cache_clear()
+            go_calculate_base_pointer.cache_clear()
             go_find_func.cache_clear()

@@ -6,11 +6,12 @@ from typing import Union
 
 from lldb import SBError, SBProcess
 
+from common.constants import pointer
 from common.golang.constants import (
-    GO_TUNE_ENTROPY_SOFTNESS,
-    GO_TUNE_LONG_SLICE,
-    GO_TUNE_LONG_STRING,
-    GO_TUNE_MAX_SWISSMAP_DIRS,
+    GO_ENTROPY_SOFTNESS,
+    GO_MAX_SLICE_EXTRACT,
+    GO_MAX_STRING_READ,
+    GO_MAX_SWISSMAP_DIRS,
     GO_TUNE_SLICE_RATE,
     GO_TUNE_SLICE_THRESHOLD,
     GO_TUNE_STRING_RATE,
@@ -41,13 +42,13 @@ class TypeHeader:
     """
 
     size: int
-    ptrbytes: int
-    t_hash: int
-    tflag: int
-    align: int
-    fieldalign: int
-    kind: int
-    name: str
+    ptrbytes: int  # Number of (prefix) bytes in the type that can contain pointers.
+    t_hash: int  # Hash of type.
+    tflag: int  # Extra type information flags.
+    align: int  # Alignment of variable with this type.
+    fieldalign: int  # Alignment of struct field with this type.
+    kind: int  # Enumeration for the type.
+    name: str  # Name for type in string form.
 
     def __str__(self) -> str:
         return (
@@ -59,13 +60,15 @@ class TypeHeader:
 @dataclass(frozen=True)
 class PopulateInfo:
     """
-    Reduce length of populate() signature by packaging some read-only parameters in a struct.
+    Read-only parameters for populating types using populate().
     """
 
-    types: int
-    etypes: int
+    # Start of the 'types' section pointed to by the Go moduledata struct.
+    types: pointer
+    # End of the 'types' section pointed to by the Go moduledata struct.
+    etypes: pointer
     ptr_size: int
-    ptr_spec: str  # for struct.unpack, e.g. Q for ptr_size == 8 bytes and L for 4 bytes.
+    ptr_specifier: str  # for struct.unpack, e.g. Q for ptr_size == 8 bytes and L for 4 bytes.
 
 
 @dataclass(frozen=True)
@@ -79,7 +82,7 @@ class ExtractInfo:
     type_structs: dict[int, "GoType"]
 
 
-def safe_read_unsigned(info: ExtractInfo, addr: int, size: int) -> Union[int, None]:
+def safe_read_unsigned(info: ExtractInfo, addr: pointer, size: int) -> Union[int, None]:
     """
     Wraps proc.ReadUnsignedFromMemory to avoid internal LLDB errors when parameters are out of bounds.
     Uses the same endianness as LLDB understands the target to be using.
@@ -89,8 +92,8 @@ def safe_read_unsigned(info: ExtractInfo, addr: int, size: int) -> Union[int, No
     :param int size: The number of bytes to read as the unsigned integer.
     :return Union[int, None]: If the operation succeeded, returns the integer. Else None.
     """
-    pointer_too_big = 1 << (info.ptr_size * 8)
-    if addr >= 0 and size > 0 and addr + size <= pointer_too_big:
+    max_pointer_value = 1 << (info.ptr_size * 8)
+    if addr >= 0 and size > 0 and addr + size <= max_pointer_value:
         err = SBError()
         value = info.proc.ReadUnsignedFromMemory(addr, size, err)
         if err.Success():
@@ -98,7 +101,7 @@ def safe_read_unsigned(info: ExtractInfo, addr: int, size: int) -> Union[int, No
     return None
 
 
-def safe_read_bytes(info: ExtractInfo, addr: int, size: int) -> Union[bytes, None]:
+def safe_read_bytes(info: ExtractInfo, addr: pointer, size: int) -> Union[bytes, None]:
     """
     Wraps proc.ReadMemory to avoid internal LLDB errors when parameters are out of bounds.
 
@@ -107,8 +110,8 @@ def safe_read_bytes(info: ExtractInfo, addr: int, size: int) -> Union[bytes, Non
     :param int size: The number of bytes to read.
     :return Union[bytes, None]: If the operation succeeded, returns the byte string. Else None.
     """
-    pointer_too_big = 1 << (info.ptr_size * 8)
-    if addr >= 0 and size > 0 and addr + size <= pointer_too_big:
+    max_pointer_value = 1 << (info.ptr_size * 8)
+    if addr >= 0 and size > 0 and addr + size <= max_pointer_value:
         err = SBError()
         buffer = info.proc.ReadMemory(addr, size, err)
         if err.Success() and buffer is not None:
@@ -129,7 +132,7 @@ class GoType:
     # ..._addr and ..._type take default values 0 and None respectively. Upon populate(), ..._addr may get set to
     # a non-zero address. This indicates that, at a later time, code should come along and set ..._type to the
     # corresponding GoType as looked up in the type_structs dictionary. We can't set it now as it might not exist yet!
-    child_addr: int
+    child_addr: pointer
     child_type: Union["GoType", None]
 
     def __init__(self, header: TypeHeader, version: tuple[int, int]) -> None:
@@ -138,13 +141,13 @@ class GoType:
         self.child_type = None
         self.version = version
 
-    def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
+    def populate(self, type_section: bytes, offset: pointer, info: PopulateInfo) -> Union[list[int], None]:
         """
         Overridden by complex datatypes: reads further data included after the header to populate type-specific fields
         with extra information.
 
         :param bytes type_section: Slice of program memory that the ModuleData structure refers to as the type section.
-        :param int offset: The offset in the section that immediately follows the header for this type.
+        :param pointer offset: The offset in the section that immediately follows the header for this type.
         :param PopulateInfo info: Packaged properties of the binary that we need to correctly continue parsing.
         :return Union[list[int], None]: If extra parsing succeeds, returns a list of pointers to other type information
                                         structures that we may need to parse recursively. Otherwise None.
@@ -160,16 +163,17 @@ class GoType:
                                                subclasses of GoType.
         """
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         """
         Overriden by most classes: reads the memory from an address to attempt to extract the object of this type,
         and all of its children. The children are encapsulated in the GoData object. Also calculates a heuristic, which
         is a confidence level of the address provided actually being of this type.
 
         :param SBProcess proc: The LLDB process object currently being worked on.
-        :param int addr: The memory address to start unpacking at.
+        :param pointer addr: The memory address to start unpacking at.
         :param int ptr_size: The size of a pointer in bytes.
-        :param set[int] seen: A set, initially empty, to keep track of pointers already dereferenced.
+        :param set[pointer] dereferenced_pointers: A set, initially empty,
+        to keep track of pointers already dereferenced.
         :param int depth: How deeply down nested structures/arrays/slices to unpack.
         :return GoData: A Python object replicating the Go object after unpacking.
         """
@@ -239,15 +243,15 @@ class GoTypeInvalid(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "invalid"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         return GoDataBad(heuristic=Confidence.JUNK.to_float())
 
 
 class GoTypeBool(GoType):
-    def get_underlying_type(self, depth: int) -> str:
+    def get_underlying_type(self, depth: pointer) -> str:
         return "bool"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         extracted: Union[GoData, None] = None
 
         val = safe_read_unsigned(info, addr, 1)
@@ -266,7 +270,7 @@ class GoTypeInt(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "int"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, info.ptr_size)
         if val is not None:
             sign_bit = 1 << (info.ptr_size - 1)
@@ -280,7 +284,7 @@ class GoTypeInt8(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "int8"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, 1)
         if val is not None:
             sign_bit = 1 << 7
@@ -294,7 +298,7 @@ class GoTypeInt16(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "int16"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, 2)
         if val is not None:
             sign_bit = 1 << 15
@@ -308,7 +312,7 @@ class GoTypeInt32(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "int32"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, 4)
         if val is not None:
             sign_bit = 1 << 31
@@ -322,7 +326,7 @@ class GoTypeInt64(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "int64"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, 8)
         if val is not None:
             sign_bit = 1 << 63
@@ -336,7 +340,7 @@ class GoTypeUint(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "uint"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, info.ptr_size)
         if val is not None:
             return GoDataInteger(heuristic=Confidence.CERTAIN.to_float(), value=val)
@@ -347,7 +351,7 @@ class GoTypeUint8(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "uint8"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, 1)
         if val is not None:
             return GoDataInteger(heuristic=Confidence.CERTAIN.to_float(), value=val)
@@ -358,7 +362,7 @@ class GoTypeUint16(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "uint16"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, 2)
         if val is not None:
             return GoDataInteger(heuristic=Confidence.CERTAIN.to_float(), value=val)
@@ -369,7 +373,7 @@ class GoTypeUint32(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "uint32"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, 4)
         if val is not None:
             return GoDataInteger(heuristic=Confidence.CERTAIN.to_float(), value=val)
@@ -380,7 +384,7 @@ class GoTypeUint64(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "uint64"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, 8)
         if val is not None:
             return GoDataInteger(heuristic=Confidence.CERTAIN.to_float(), value=val)
@@ -391,7 +395,7 @@ class GoTypeUintptr(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "uintptr"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, info.ptr_size)
         if val is not None:
             return GoDataPointer(heuristic=Confidence.CERTAIN.to_float(), address=val)
@@ -402,7 +406,7 @@ class GoTypeFloat32(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "float32"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         data = safe_read_bytes(info, addr, 4)
         if data is not None:
             extracted: tuple[float] = struct.unpack("<f", data)
@@ -414,7 +418,7 @@ class GoTypeFloat64(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "float64"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         data = safe_read_bytes(info, addr, 8)
         if data is not None:
             extracted: tuple[float] = struct.unpack("<d", data)
@@ -426,7 +430,7 @@ class GoTypeComplex64(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "complex64"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         data = safe_read_bytes(info, addr, 8)
         if data is not None:
             extracted: tuple[float, float] = struct.unpack("<ff", data)
@@ -438,7 +442,7 @@ class GoTypeComplex128(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "complex128"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         data = safe_read_bytes(info, addr, 16)
         if data is not None:
             extracted: tuple[float, float] = struct.unpack("<dd", data)
@@ -450,7 +454,7 @@ class GoTypeArray(GoType):
     length: int
 
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
-        (sub_elem, sup_slice, this_len) = struct.unpack_from("<" + info.ptr_spec * 3, type_section, offset)
+        (sub_elem, sup_slice, this_len) = struct.unpack_from("<" + info.ptr_specifier * 3, type_section, offset)
         self.child_addr = sub_elem
         self.length = this_len
         return [sub_elem, sup_slice]
@@ -467,7 +471,7 @@ class GoTypeArray(GoType):
         else:
             return self.header.name
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         extracted: Union[GoData, None] = None
 
         if self.child_type is not None:
@@ -482,7 +486,9 @@ class GoTypeArray(GoType):
                     if self.length > 0:
                         valid = True
                         for i in range(self.length):
-                            elem = self.child_type.extract_at(info, addr + i * elem_size, seen, depth - 1)
+                            elem = self.child_type.extract_at(
+                                info, addr + i * elem_size, dereferenced_pointers, depth - 1
+                            )
                             if isinstance(elem, GoDataBad):
                                 # then the memory doesn't actually exist for this element,
                                 # so the memory for the array does not exist either.
@@ -510,7 +516,7 @@ class GoTypeChan(GoType):
     direction: int
 
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
-        (sub_elem, direction) = struct.unpack_from("<" + info.ptr_spec * 2, type_section, offset)
+        (sub_elem, direction) = struct.unpack_from("<" + info.ptr_specifier * 2, type_section, offset)
         self.child_addr = sub_elem
         self.direction = direction
         return [sub_elem]
@@ -559,9 +565,9 @@ class GoTypeFunc(GoType):
         if has_uncommon:
             offset += 16
 
-        self.input_addrs = list(struct.unpack_from("<" + info.ptr_spec * num_param_in, type_section, offset))
+        self.input_addrs = list(struct.unpack_from("<" + info.ptr_specifier * num_param_in, type_section, offset))
         offset += num_param_in * info.ptr_size
-        self.output_addrs = list(struct.unpack_from("<" + info.ptr_spec * num_param_out, type_section, offset))
+        self.output_addrs = list(struct.unpack_from("<" + info.ptr_specifier * num_param_out, type_section, offset))
 
         return self.input_addrs + self.output_addrs
 
@@ -605,10 +611,10 @@ class GoTypeFunc(GoType):
 
 class GoTypeInterfaceMethod:
     name: str
-    type_addr: int
+    type_addr: pointer
     type: Union[GoType, None]
 
-    def __init__(self, name: str, type_addr: int):
+    def __init__(self, name: str, type_addr: pointer):
         self.type_addr = type_addr
         self.name = name
         self.type = None
@@ -617,10 +623,12 @@ class GoTypeInterfaceMethod:
 class GoTypeInterface(GoType):
     methods: list[GoTypeInterfaceMethod]
 
-    def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
+    def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[pointer], None]:
         self.methods = []
         (go_min_version, _) = self.version
-        (methods_base, methods_len) = struct.unpack_from("<" + info.ptr_spec * 2, type_section, offset + info.ptr_size)
+        (methods_base, methods_len) = struct.unpack_from(
+            "<" + info.ptr_specifier * 2, type_section, offset + info.ptr_size
+        )
         # Each method structure in the methods table is a struct of two 32-bit integers.
         for i in range(methods_len):
             imethod_ptr = methods_base + i * 8
@@ -643,7 +651,7 @@ class GoTypeInterface(GoType):
 
         return list(map(lambda x: x.type_addr, self.methods))
 
-    def fixup_types(self, type_structs: dict[int, "GoType"]) -> None:
+    def fixup_types(self, type_structs: dict[pointer, "GoType"]) -> None:
         for method in self.methods:
             method.type = type_structs.get(method.type_addr)
 
@@ -665,7 +673,7 @@ class GoTypeInterface(GoType):
             build = self.header.name
         return build
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         extracted: Union[GoData, None] = None
 
         type_ptr: Union[int, None] = None
@@ -689,7 +697,7 @@ class GoTypeInterface(GoType):
             header = TypeHeader()
             extractor = GoTypePointer(header=header, version=self.version)
             extractor.child_type = info.type_structs.get(type_ptr)
-            extracted = extractor.extract_at(info, addr + info.ptr_size, seen, depth)
+            extracted = extractor.extract_at(info, addr + info.ptr_size, dereferenced_pointers, depth)
 
         if extracted is None:
             if fail_nicely:
@@ -701,20 +709,20 @@ class GoTypeInterface(GoType):
 
 class GoTypeMap(GoType):
 
-    key_addr: int
+    key_addr: pointer
     key_type: Union[GoType, None]
-    bucket_addr: int
+    bucket_addr: pointer
     bucket_type: Union[GoType, None]
 
-    def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
+    def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[pointer], None]:
         (self.key_addr, self.child_addr, self.bucket_addr) = struct.unpack_from(
-            "<" + info.ptr_spec * 3, type_section, offset
+            "<" + info.ptr_specifier * 3, type_section, offset
         )
         self.key_type = None
         self.bucket_type = None
         return [self.key_addr, self.child_addr, self.bucket_addr]
 
-    def fixup_types(self, type_structs: dict[int, "GoType"]) -> None:
+    def fixup_types(self, type_structs: dict[pointer, "GoType"]) -> None:
         self.key_type = type_structs.get(self.key_addr, None)
         self.child_type = type_structs.get(self.child_addr, None)
         self.bucket_type = type_structs.get(self.bucket_addr, None)
@@ -728,7 +736,7 @@ class GoTypeMap(GoType):
             val_str = self.child_type.get_underlying_type(depth)
         return f"map[{key_str}]{val_str}"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         extracted: Union[GoData, None] = None
 
         if self.bucket_type is not None:
@@ -737,11 +745,11 @@ class GoTypeMap(GoType):
             # (the programmer can choose to use the old version even in 1.24).
             parser: Union[SwissMapParser, NoSwissMapParser]
             if go_min_version < 24:
-                parser = NoSwissMapParser(info, self.bucket_type, seen, self.version)
+                parser = NoSwissMapParser(info, self.bucket_type, dereferenced_pointers, self.version)
             else:
-                parser = SwissMapParser(info, self.bucket_type, seen)
+                parser = SwissMapParser(info, self.bucket_type, dereferenced_pointers)
             extracted = parser.parse(addr, depth)
-            # changes to seen are still present, since it was passed by reference.
+            # changes to dereferenced_pointers are still present, since it was passed by reference.
 
         if extracted is None:
             extracted = GoDataBad(heuristic=Confidence.JUNK.to_float())
@@ -750,7 +758,7 @@ class GoTypeMap(GoType):
 
 class GoTypePointer(GoType):
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
-        (sub_elem,) = struct.unpack_from("<" + info.ptr_spec, type_section, offset)
+        (sub_elem,) = struct.unpack_from("<" + info.ptr_specifier, type_section, offset)
         self.child_addr = sub_elem
         return [sub_elem]
 
@@ -766,18 +774,19 @@ class GoTypePointer(GoType):
                 subtype = self.child_type.header.name
         return f"*{subtype}"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         extracted: Union[GoData, None] = None
 
         if self.child_type:
             child_ptr = safe_read_unsigned(info, addr, info.ptr_size)
             if child_ptr is not None:
                 if child_ptr > 0:
-                    if child_ptr not in seen:
-                        seen.add(child_ptr)
-                        # changes to seen are reflected everywhere, so we'll never dereference again in this extraction.
+                    if child_ptr not in dereferenced_pointers:
+                        dereferenced_pointers.add(child_ptr)
+                        # changes to dereferenced_pointers are reflected everywhere, so we'll never dereference again
+                        # in this extraction.
                         # this is good because we can reduce duplication of displayed information.
-                        dereferenced = self.child_type.extract_at(info, child_ptr, seen, depth)
+                        dereferenced = self.child_type.extract_at(info, child_ptr, dereferenced_pointers, depth)
                         if not isinstance(dereferenced, GoDataBad):
                             extracted = dereferenced
                         else:
@@ -797,7 +806,7 @@ class GoTypePointer(GoType):
 
 class GoTypeSlice(GoType):
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
-        (sub_elem,) = struct.unpack_from("<" + info.ptr_spec, type_section, offset)
+        (sub_elem,) = struct.unpack_from("<" + info.ptr_specifier, type_section, offset)
         self.child_addr = sub_elem
         return [sub_elem]
 
@@ -810,7 +819,7 @@ class GoTypeSlice(GoType):
             subtype = self.child_type.get_underlying_type(depth)
         return f"[]{subtype}"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         extracted: Union[GoData, None] = None
 
         if self.child_type:
@@ -837,10 +846,12 @@ class GoTypeSlice(GoType):
                             heuristic_sum = 0.0
 
                             # Don't extract a huge number of elements!
-                            num_extract = min(length, GO_TUNE_LONG_SLICE)
+                            num_extract = min(length, GO_MAX_SLICE_EXTRACT)
                             valid = True
                             for i in range(num_extract):
-                                elem = self.child_type.extract_at(info, base + i * elem_size, seen, depth - 1)
+                                elem = self.child_type.extract_at(
+                                    info, base + i * elem_size, dereferenced_pointers, depth - 1
+                                )
                                 if isinstance(elem, GoDataBad):
                                     valid = False
                                     break
@@ -887,7 +898,7 @@ class GoTypeString(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "string"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         extracted: Union[GoData, None] = None
 
         str_start = safe_read_unsigned(info, addr, info.ptr_size)
@@ -898,7 +909,7 @@ class GoTypeString(GoType):
                 score = rate_candidate_length(length, GO_TUNE_STRING_THRESHOLD, GO_TUNE_STRING_RATE)
 
                 # Only extract the start of a very long string.
-                num_extract = min(length, GO_TUNE_LONG_STRING)
+                num_extract = min(length, GO_MAX_STRING_READ)
                 data = safe_read_bytes(info, str_start, num_extract)
                 if data is not None:
                     decoded = data.decode("utf-8", "replace")
@@ -931,10 +942,10 @@ class GoTypeString(GoType):
 class GoTypeStructField:
     offset: int
     name: str
-    type_addr: int
+    type_addr: pointer
     type: Union[GoType, None]
 
-    def __init__(self, offset: int, name: str, type_addr: int):
+    def __init__(self, offset: int, name: str, type_addr: pointer):
         self.offset = offset
         self.type_addr = type_addr
         self.name = name
@@ -944,9 +955,9 @@ class GoTypeStructField:
 class GoTypeStruct(GoType):
     fields: list[GoTypeStructField]
 
-    def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
+    def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[pointer], None]:
         (go_min_version, go_max_version) = self.version
-        (_, fields_addr, fields_len) = struct.unpack_from("<" + info.ptr_spec * 3, type_section, offset)
+        (_, fields_addr, fields_len) = struct.unpack_from("<" + info.ptr_specifier * 3, type_section, offset)
         self.fields = []
 
         for i in range(fields_len):
@@ -955,7 +966,7 @@ class GoTypeStruct(GoType):
             if info.types <= addr < info.etypes:
                 field_struct_offset = addr - info.types
                 (field_name_ptr, field_type, field_offset) = struct.unpack_from(
-                    "<" + info.ptr_spec * 3, type_section, field_struct_offset
+                    "<" + info.ptr_specifier * 3, type_section, field_struct_offset
                 )
 
                 field_name_ptr = field_name_ptr - info.types + 1
@@ -1002,7 +1013,7 @@ class GoTypeStruct(GoType):
 
         return build
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         extracted: Union[GoData, None] = None
         store = []
 
@@ -1013,7 +1024,7 @@ class GoTypeStruct(GoType):
                 for field in self.fields:
                     value: GoData = GoDataBad(heuristic=Confidence.JUNK.to_float())
                     if field.type is not None:
-                        value = field.type.extract_at(info, addr + field.offset, seen, depth - 1)
+                        value = field.type.extract_at(info, addr + field.offset, dereferenced_pointers, depth - 1)
 
                     if isinstance(value, GoDataBad):
                         # it may be uninitialised, while the previous fields in the struct contain good information.
@@ -1041,7 +1052,7 @@ class GoTypeUnsafePointer(GoType):
     def get_underlying_type(self, depth: int) -> str:
         return "unsafe.Pointer"
 
-    def extract_at(self, info: ExtractInfo, addr: int, seen: set[int], depth: int) -> GoData:
+    def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         child_ptr = safe_read_unsigned(info, addr, info.ptr_size)
         if child_ptr is not None:
             return GoDataPointer(heuristic=Confidence.CERTAIN.to_float(), address=child_ptr)
@@ -1061,10 +1072,12 @@ class NoSwissMapParser:
     # In the unpacking of an entire object we never wish to unpack the same pointer twice (for brevity).
     seen_pointers: set[int]
 
-    def __init__(self, info: ExtractInfo, bucket_type: GoType, seen: set[int], version: tuple[int, int]):
+    def __init__(
+        self, info: ExtractInfo, bucket_type: GoType, dereferenced_pointers: set[pointer], version: tuple[int, int]
+    ):
         self.info = info
         self.bucket_type = bucket_type
-        self.seen_pointers = seen
+        self.seen_pointers = dereferenced_pointers
         self.version = version
 
     def __parse_bucket(
@@ -1163,7 +1176,7 @@ class NoSwissMapParser:
 
         return extracted
 
-    def parse(self, addr: int, nest_depth: int) -> GoData:
+    def parse(self, addr: pointer, nest_depth: int) -> GoData:
         """
         Extracts data from the header structure of the map. This is the first function to be called to parse a map.
 
@@ -1180,7 +1193,7 @@ class NoSwissMapParser:
         if count is not None and log2_of_num_buckets is not None and seed is not None and buckets is not None:
             seed_bits = f"{seed:032b}"
 
-            confidence = entropy(seed_bits) ** GO_TUNE_ENTROPY_SOFTNESS
+            confidence = entropy(seed_bits) ** GO_ENTROPY_SOFTNESS
 
             if nest_depth > 0:
                 if count > 0:
@@ -1221,19 +1234,19 @@ class SwissMapParser:
     """
 
     info: ExtractInfo
-    ptr_spec: str
+    ptr_specifier: str
     group_type: GoType
 
     seen_pointers: set[int]
 
-    def __init__(self, info: ExtractInfo, group_type: GoType, seen: set[int]):
+    def __init__(self, info: ExtractInfo, group_type: GoType, dereferenced_pointers: set[int]):
         self.info = info
         self.group_type = group_type
-        self.seen_pointers = seen
+        self.seen_pointers = dereferenced_pointers
         if self.info.ptr_size == 4:
-            self.ptr_spec = "I"
+            self.ptr_specifier = "I"
         else:
-            self.ptr_spec = "Q"
+            self.ptr_specifier = "Q"
 
     def __unpack_slot(self, slot_obj: GoData) -> Union[tuple[GoData, GoData], None]:
         """
@@ -1250,7 +1263,7 @@ class SwissMapParser:
                 return (key_obj, elem_obj)
         return None
 
-    def __parse_group(self, group_ptr: int, nest_depth: int) -> Union[list[tuple[GoData, GoData]], None]:
+    def __parse_group(self, group_ptr: pointer, nest_depth: int) -> Union[list[tuple[GoData, GoData]], None]:
         """
         Given a pointer to a group (a.k.a. bucket), extract a list of valid entries.
 
@@ -1291,7 +1304,7 @@ class SwissMapParser:
                                 from_group.append(unpacked)
         return from_group
 
-    def __parse_table(self, table_ptr: int, nest_depth: int) -> Union[list[tuple[GoData, GoData]], None]:
+    def __parse_table(self, table_ptr: pointer, nest_depth: int) -> Union[list[tuple[GoData, GoData]], None]:
         """
         Given a pointer to a table (an array of groups), parse them all and concatenate results.
 
@@ -1320,7 +1333,7 @@ class SwissMapParser:
 
         return from_table
 
-    def parse(self, addr: int, nest_depth: int) -> GoData:
+    def parse(self, addr: pointer, nest_depth: int) -> GoData:
         """
         Extracts data from the header structure of the map. This is the first function to be called to parse a map.
 
@@ -1338,7 +1351,7 @@ class SwissMapParser:
             seed_bits = f"{seed:064b}"
             if self.info.ptr_size == 4:
                 seed_bits = seed_bits[32:]
-            confidence = entropy(seed_bits) ** GO_TUNE_ENTROPY_SOFTNESS
+            confidence = entropy(seed_bits) ** GO_ENTROPY_SOFTNESS
 
             if nest_depth > 0:
                 if length > 0:
@@ -1349,15 +1362,15 @@ class SwissMapParser:
                         entries = self.__parse_group(dir_ptr, nest_depth)
                     else:
                         # Regular map type. dir_ptr points to an array of tables.
-                        if dir_len > GO_TUNE_MAX_SWISSMAP_DIRS:
+                        if dir_len > GO_MAX_SWISSMAP_DIRS:
                             # This is a very large number of directories: don't parse all of them.
-                            dir_len = GO_TUNE_MAX_SWISSMAP_DIRS
+                            dir_len = GO_MAX_SWISSMAP_DIRS
                             # We doubt this is actually a map.
                             confidence = 0.0
 
                         table_array = safe_read_bytes(self.info, dir_ptr, self.info.ptr_size * dir_len)
                         if table_array is not None:
-                            for (table_ptr,) in struct.iter_unpack("<" + self.ptr_spec, table_array):
+                            for (table_ptr,) in struct.iter_unpack("<" + self.ptr_specifier, table_array):
                                 from_table = self.__parse_table(table_ptr, nest_depth)
                                 if from_table is None:
                                     entries = None

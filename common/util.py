@@ -23,7 +23,7 @@ from lldb import (
 )
 
 from common.constants import DEFAULT_TERMINAL_COLUMNS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
-from common.golang.util import go_find_func_name_offset, perform_go_functions
+from common.golang.util import go_context_analysis, go_find_func_name_offset
 from common.output_util import print_message
 from common.settings import LLEFSettings
 from common.state import LLEFState
@@ -78,25 +78,33 @@ def get_registers(frame: SBFrame, frame_type: str) -> Union[SBValue, list[SBValu
     return registers
 
 
-def get_funcinfo_from_frame(settings: LLEFSettings, target: SBTarget, frame: SBFrame) -> tuple[str, int]:
+def get_function_info_from_frame(settings: LLEFSettings, target: SBTarget, frame: SBFrame) -> tuple[str, int]:
     """
-    Retrieves a best-effort function name and offset the PC is within it, given the current frame.
+    Attempt to find a function name and offset that the PC is within the function, given the current debug frame.
 
     :param LLEFSettings settings: The LLEFSettings object for determining the Go support level.
     :param SBTarget target: The target associated with the current process. For converting file->load addresses.
     :param SBFrame frame: The debugger frame.
-    :return tuple[str, int]: A pair of (function name, offset).
+    :return tuple[str, int]: A tuple of (function name, offset).
     """
-    pc = frame.GetPC()  # Returns the load address
-    if perform_go_functions(settings):
-        pair = go_find_func_name_offset(pc)
-        if pair[0]:
-            return pair
+    pc = frame.GetPC()
+    function_name = ""
 
-    func = frame.GetFunction()
-    if func:
-        return (func.GetName(), pc - func.GetStartAddress().GetLoadAddress(target))
-    return (frame.GetSymbol().GetName(), pc - frame.GetSymbol().GetStartAddress().GetLoadAddress(target))
+    if go_context_analysis(settings):
+        function_name, offset = go_find_func_name_offset(pc)
+
+    # Use LLDB API to get function name and offset.
+    if function_name == "":
+        function = frame.GetFunction()
+        if function:
+            function_name = function.GetName()
+            offset = pc - function.GetStartAddress().GetLoadAddress(target)
+        else:
+            symbol = frame.GetSymbol()
+            function_name = symbol.GetName()
+            offset = pc - symbol.GetStartAddress().GetLoadAddress(target)
+
+    return (function_name, offset)
 
 
 def get_frame_arguments(frame: SBFrame, frame_argument_name_color: TERM_COLORS) -> str:

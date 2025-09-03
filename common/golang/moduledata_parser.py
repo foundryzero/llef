@@ -5,6 +5,7 @@ from typing import Union
 
 from lldb import UINT32_MAX, SBData, SBError, SBProcess, SBTarget
 
+from common.constants import pointer
 from common.golang.constants import GO_MD_7_ONLY, GO_MD_8_TO_15, GO_MD_16_TO_17, GO_MD_18_TO_19, GO_MD_20_TO_24
 from common.golang.interfaces import ModuleDataInfo
 from common.golang.types import GoType, PopulateInfo, TypeHeader
@@ -15,21 +16,29 @@ from common.state import LLEFState
 class ModuleDataParser:
     """
     Stores information about the ModuleData context and parses type information from it.
+
+    Latest ModuleData struct information found at: https://github.com/golang/go/blob/master/src/runtime/symtab.go.
     """
 
-    sect_addr: int
-    sect_offset: int
-    types: int
-    etypes: int
+    section_offset: int
+
+    # Start of the 'types' section pointed to by the Go moduledata struct. Name aligns with Go source.
+    types: pointer
+
+    # End of the 'types' section pointed to by the Go moduledata struct. Name aligns with Go source.
+    etypes: pointer
+
+    # typelinks is an array of offsets to these type information structures. The length is typelinks_len.
+    # Name aligns with Go source.
     typelinks: int
     typelinks_len: int
 
     # A map holding successfully parsed GoType Python structures with their associated addresses.
-    __type_structs: dict[int, GoType]
+    # Name aligns with Go source.
+    __type_structs: dict[pointer, GoType]
 
-    def __init__(self, sect_addr: int, sect_offset: int) -> None:
-        self.sect_addr = sect_addr
-        self.sect_offset = sect_offset
+    def __init__(self, section_offset: int) -> None:
+        self.section_offset = section_offset
         self.__type_structs = {}
 
     def get_name(self, type_section: bytes, name_offset: int, header: TypeHeader) -> Union[str, None]:
@@ -43,9 +52,10 @@ class ModuleDataParser:
         """
 
         name = None
+        # Check that pointer + offset doesn't exceed the end pointer for the types section.
         if self.types + name_offset < self.etypes:
+            # Module data layout depends on the Go version.
             (go_min_version, go_max_version) = LLEFState.go_state.pclntab_info.version_bounds
-            # if we are definitely Go >= 17:
             if go_min_version >= 17:
                 length, name_offset = read_varint(type_section, name_offset)
                 if self.types + name_offset + length <= self.etypes:
@@ -54,7 +64,6 @@ class ModuleDataParser:
                     if header.tflag & 2:
                         name = name[1:]
 
-            # if we are definitely Go <= 16:
             elif go_max_version <= 16:
                 (length,) = struct.unpack_from(">H", type_section, name_offset)
                 name_offset += 2
@@ -63,13 +72,9 @@ class ModuleDataParser:
                     if header.tflag & 2:
                         name = name[1:]
 
-            # else, we're either 1.16 or 1.17 but unable to differentiate. Highly unlikely case.
-            else:
-                name = "?"
-
         return name
 
-    def parse_type(self, type_section: bytes, offset: int) -> bool:
+    def parse_type(self, type_section: bytes, type_offset: int) -> bool:
         """
         Decodes and adds to internal state an individual type information structure.
 
@@ -77,29 +82,29 @@ class ModuleDataParser:
         :param int offset: The offset within the section to begin parsing at.
         :return bool: If parsing the type (and all children/parent types) succeeds, returns True. Otherwise False.
         """
-        addr = self.types + offset
-        if addr in self.__type_structs:
-            # No problem, we probably already discovered it through another type.
+        type_address = self.types + type_offset
+        if type_address in self.__type_structs:
+            # Type already parsed.
             return True
 
         ptr_size = LLEFState.go_state.pclntab_info.ptr_size
         if ptr_size == 4:
-            ptr_spec = "I"
+            ptr_specifier = "I"
         else:
             # ptr_size == 8 here.
-            ptr_spec = "Q"
+            ptr_specifier = "Q"
 
         # Send some useful information to populate().
-        info = PopulateInfo(types=self.types, etypes=self.etypes, ptr_size=ptr_size, ptr_spec=ptr_spec)
+        info = PopulateInfo(types=self.types, etypes=self.etypes, ptr_size=ptr_size, ptr_specifier=ptr_specifier)
 
-        width = ptr_size * 4 + 16
+        type_entry_width = ptr_size * 4 + 16
         # Check that struct.unpack_from() won't read outside bounds.
-        if addr + width <= self.etypes:
+        if type_address + type_entry_width <= self.etypes:
             header = TypeHeader()
 
             # Luckily, this format has remained the same for all Go versions since inception.
-            unpacker = "<" + ptr_spec * 2 + "IBBBB" + ptr_spec * 2 + "II"
-            tup = struct.unpack_from(unpacker, type_section, offset)
+            unpacker = "<" + ptr_specifier * 2 + "IBBBB" + ptr_specifier * 2 + "II"
+            tup = struct.unpack_from(unpacker, type_section, type_offset)
             (
                 header.size,  # usize
                 header.ptrbytes,  # usize
@@ -122,12 +127,14 @@ class ModuleDataParser:
                 go_type = GoType.make_from(header, LLEFState.go_state.pclntab_info.version_bounds)
 
                 if go_type is not None:
-                    type_struct_pointers = go_type.populate(type_section, offset + width, info)
+                    # Each type has a corresponding populate() function.
+                    type_struct_pointers = go_type.populate(type_section, type_offset + type_entry_width, info)
+
                     # If an error occurred during parsing: type_struct_pointers is None
                     # Otherwise, if simple data type: type_struct_pointers is []
                     # Otherwise, if complex data type: it's a list of pointers go walk over next (recursively).
                     if type_struct_pointers is not None:
-                        self.__type_structs[addr] = go_type
+                        self.__type_structs[type_address] = go_type
 
                         processing_valid = True
                         for type_addr in type_struct_pointers:
@@ -148,13 +155,13 @@ class ModuleDataParser:
 
     def parse(self, proc: SBProcess, data: SBData, target: SBTarget) -> Union[ModuleDataInfo, None]:
         """
-        Attempts to parse a candidate ModuleData, as located by self.sect_offset.
+        Attempts to parse a candidate ModuleData, as located by self.section_offset.
 
         :param SBProcess proc: The process currently being debugged.
         :param SBData data: The buffer holding the candidate ModuleData structure.
         :param SBTarget target: The target associated with the process. Used for resolving file->load addresses.
         :return Union[ModuleDataInfo, None]: If run on a real ModuleData, and a supported Go version, then returns
-                                             the parsed information as a datastructure. Otherwise None.
+                                             the parsed information as a data structure. Otherwise None.
         """
 
         offsets = None
@@ -171,19 +178,22 @@ class ModuleDataParser:
         elif min_go >= 20 and max_go <= 24:
             offsets = GO_MD_20_TO_24
 
+        module_data_info = None
+
         if offsets is not None:
             if LLEFState.go_state.pclntab_info.ptr_size == 4:
-                reader = data.uint32[self.sect_offset // 4 :]
+                reader = data.uint32[self.section_offset // 4 :]
             else:
                 # ptr_size == 8 here.
-                reader = data.uint64[self.sect_offset // 8 :]
+                reader = data.uint64[self.section_offset // 8 :]
 
             # Use these fields as a sanity check, to ensure we really did find ModuleData.
-            minpc = reader[offsets.minpc]
-            maxpc = reader[offsets.maxpc]
+            min_program_counter = reader[offsets.minpc]
+            max_program_counter = reader[offsets.maxpc]
+            first_function_address = LLEFState.go_state.pclntab_info.func_mapping[0][1].file_addr
             if (
-                minpc == LLEFState.go_state.pclntab_info.func_mapping[0][1].file_addr
-                and maxpc == LLEFState.go_state.pclntab_info.max_pc_file
+                min_program_counter == first_function_address
+                and max_program_counter == LLEFState.go_state.pclntab_info.max_pc_file
             ):
                 self.types = file_to_load_address(target, reader[offsets.types])
                 # -1 +1 so that we don't miss the end of the section by 1, and the file->load resolution then fails.
@@ -194,18 +204,19 @@ class ModuleDataParser:
                 err = SBError()
                 type_section = proc.ReadMemory(self.types, self.etypes - self.types, err)
                 if err.Success() and type_section is not None:
+                    read_success = True
                     for i in range(self.typelinks_len):
                         err = SBError()
                         offset = proc.ReadUnsignedFromMemory(self.typelinks + i * 4, 4, err)
                         if err.Fail():
-                            return None
+                            read_success = False
                         if not self.parse_type(type_section, offset):
-                            return None
+                            read_success = False
 
                     # Now we have discovered everything, go and fill in links from type to type.
-                    if len(self.__type_structs) > 0:
+                    if read_success and len(self.__type_structs) > 0:
                         for go_type in self.__type_structs.values():
                             go_type.fixup_types(self.__type_structs)
-                        return ModuleDataInfo(type_structs=self.__type_structs)
+                        module_data_info = ModuleDataInfo(type_structs=self.__type_structs)
 
-        return None
+        return module_data_info

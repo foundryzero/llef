@@ -58,15 +58,15 @@ class TypeGetter:
 
     __simple_map: dict[str, SimpleType]
 
-    def __slice_to_type(self, string: str) -> Union[GoTypeSlice, None]:
+    def __slice_to_type(self, slice_repr: str) -> Union[GoTypeSlice, None]:
         """
         Parses the string representation of a Go slice type. The string must start with "[]".
 
-        :param str string: The string representation of a Go slice type.
+        :param slice_repr str: The string representation of a Go slice type.
         :return Union[GoTypeSlice, None]: Returns a GoTypeSlice if the provided string is valid, otherwise None.
         """
         resolved: Union[GoTypeSlice, None] = None
-        elem_type = self.string_to_type(string[2:])
+        elem_type = self.string_to_type(slice_repr[2:])
         if elem_type is not None:
             header = TypeHeader()
             header.align = self.__ptr_size
@@ -78,15 +78,15 @@ class TypeGetter:
 
         return resolved
 
-    def __array_to_type(self, string: str) -> Union[GoTypeArray, None]:
+    def __array_to_type(self, array_repr: str) -> Union[GoTypeArray, None]:
         """
         Parses the string representation of a Go array type. The string must start with "[N]", where N is a number.
 
-        :param str string: The string representation of a Go array type.
+        :param array_repr str: The string representation of a Go array type.
         :return Union[GoTypeArray, None]: Returns a GoTypeArray if the provided string is valid, otherwise None.
         """
         resolved: Union[GoTypeArray, None] = None
-        partitioned = string[1:].split("]", maxsplit=1)
+        partitioned = array_repr[1:].split("]", maxsplit=1)
         if len(partitioned) == 2:
             [length_string, elem_string] = partitioned
 
@@ -109,15 +109,15 @@ class TypeGetter:
                     resolved.child_type = elem_type
         return resolved
 
-    def __pointer_to_type(self, string: str) -> Union[GoTypePointer, None]:
+    def __pointer_to_type(self, pointer_repr: str) -> Union[GoTypePointer, None]:
         """
         Parses the string representation of a Go pointer type. The string must start with "*".
 
-        :param str string: The string representation of a Go pointer type.
+        :param pointer_repr str: The string representation of a Go pointer type.
         :return Union[GoTypePointer, None]: Returns a GoTypePointer if the provided string is valid, otherwise None.
         """
         resolved: Union[GoTypePointer, None] = None
-        deref_type = self.string_to_type(string[1:])
+        deref_type = self.string_to_type(pointer_repr[1:])
         if deref_type is not None:
             header = TypeHeader()
             header.align = self.__ptr_size
@@ -126,15 +126,15 @@ class TypeGetter:
             resolved.child_type = deref_type
         return resolved
 
-    def __struct_to_type(self, string: str) -> Union[GoTypeStruct, None]:
+    def __struct_to_type(self, struct_repr: str) -> Union[GoTypeStruct, None]:
         """
         Parses the string representation of a Go struct type. The string must start with "struct".
 
-        :param str string: The string representation of a Go struct type.
+        :param struct_repr str: The string representation of a Go struct type.
         :return Union[GoTypeStruct, None]: Returns a GoTypeStruct if the provided string is valid, otherwise None.
         """
         resolved: Union[GoTypeStruct, None] = None
-        body = string[6:].strip()
+        body = struct_repr[6:].strip()
         if body.startswith("{") and body.endswith("}"):
             body = body[1:-1].strip()
 
@@ -191,15 +191,15 @@ class TypeGetter:
                 resolved.fields = field_list
         return resolved
 
-    def __map_to_type(self, string: str) -> Union[GoTypeMap, None]:
+    def __map_to_type(self, map_repr: str) -> Union[GoTypeMap, None]:
         """
         Parses the string representation of a Go map type. The string must start with "map[".
 
-        :param str string: The string representation of a Go map type.
+        :param map_repr str: The string representation of a Go map type.
         :return Union[GoTypeMap, None]: Returns a GoTypeMap if the provided string is valid, otherwise None.
         """
         resolved: Union[GoTypeMap, None] = None
-        body = string[4:]
+        body = map_repr[4:]
         # Track level of [] nestedness.
         level = 1
 
@@ -251,12 +251,12 @@ class TypeGetter:
         header.size = simple_type.size
         return simple_type.go_type(header=header, version=self.__version)
 
-    def string_to_type(self, string: str) -> Union[GoType, None]:
+    def string_to_type(self, type_repr: str) -> Union[GoType, None]:
         """
         Parses the string representation of any Go type.
         This is not a fully-compliant parser: for example, do not use characters such as "{}[];" in struct field names.
 
-        :param str string: The string representation of a Go type.
+        :param type_repr str: The string representation of a Go type.
         :return Union[GoType, None]: Returns a GoType object if the provided string is valid, otherwise None.
         """
 
@@ -264,37 +264,37 @@ class TypeGetter:
 
         if LLEFState.go_state.moduledata_info is not None:
             # First check if easily available from the binary:
-            resolved = self.__name_to_type.get(string)
+            resolved = self.__name_to_type.get(type_repr)
             if resolved is None:
                 # If not, parse it ourselves.
 
-                simple_triple = self.__simple_map.get(string)
+                simple_triple = self.__simple_map.get(type_repr)
                 if simple_triple is not None:
                     # Simple data types.
                     resolved = self.__construct_from_simple(simple_triple)
 
                 else:
                     # Complex data types.
-                    if string.startswith("[]"):
-                        resolved = self.__slice_to_type(string)
+                    if type_repr.startswith("[]"):
+                        resolved = self.__slice_to_type(type_repr)
 
-                    elif string.startswith("["):
-                        resolved = self.__array_to_type(string)
+                    elif type_repr.startswith("["):
+                        resolved = self.__array_to_type(type_repr)
 
-                    elif string.startswith("*"):
-                        resolved = self.__pointer_to_type(string)
+                    elif type_repr.startswith("*"):
+                        resolved = self.__pointer_to_type(type_repr)
 
-                    elif string.startswith("struct"):
-                        resolved = self.__struct_to_type(string)
+                    elif type_repr.startswith("struct"):
+                        resolved = self.__struct_to_type(type_repr)
 
-                    elif string.startswith("map["):
-                        resolved = self.__map_to_type(string)
+                    elif type_repr.startswith("map["):
+                        resolved = self.__map_to_type(type_repr)
 
-                    elif string.startswith("func") or string.startswith("chan"):
+                    elif type_repr.startswith("func") or type_repr.startswith("chan"):
                         # We don't unpack these types, so just leave them as raw pointers.
                         resolved = self.__construct_from_simple(self.__simple_map["uintptr"])
 
-                    elif string.startswith("interface"):
+                    elif type_repr.startswith("interface"):
                         pass
 
         return resolved

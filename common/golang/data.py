@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from common.golang.constants import GO_TUNE_STR_SHOW_LENGTH
+from common.golang.constants import GO_STR_TRUNCATE_LEN
 
 
 class Confidence(Enum):
@@ -130,8 +130,11 @@ class GoDataArray(GoData):
     def __str__(self) -> str:
         build = "["
         for elem in self.contents:
-            build += str(elem) + " "
-        return build.removesuffix(" ") + "]"
+            if isinstance(elem, GoDataString):
+                build += f'"{str(elem)}", '
+            else:
+                build += f"{str(elem)}, "
+        return build.removesuffix(", ") + "]"
 
 
 @dataclass(frozen=True)
@@ -154,8 +157,8 @@ class GoDataSlice(GoData):
         else:
             build = "["
             for elem in self.contents:
-                build += str(elem) + " "
-            build = build.removesuffix(" ")
+                build += str(elem) + ", "
+            build = build.removesuffix(", ")
             if len(self.contents) < self.length:
                 build += f"...{self.length - len(self.contents)} more"
             return build + "]"
@@ -177,8 +180,11 @@ class GoDataString(GoData):
         if len(self.contents) == self.length:
             full = self.contents.decode("utf-8", "replace")
             rep = repr(full)
-            if len(rep) > GO_TUNE_STR_SHOW_LENGTH:
-                return rep[: GO_TUNE_STR_SHOW_LENGTH - 1] + ".."
+            # Switch single quotes from repr() to double quotes.
+            if len(rep) >= 2:
+                rep = rep[1:-1]
+            if len(rep) > GO_STR_TRUNCATE_LEN:
+                return rep[: GO_STR_TRUNCATE_LEN - 1] + ".."
             else:
                 return rep
         else:
@@ -196,8 +202,11 @@ class GoDataStruct(GoData):
     def __str__(self) -> str:
         build = "{"
         for f_name, f_val in self.fields:
-            build += f"{f_name}:{str(f_val)} "
-        build = build.removesuffix(" ") + "}"
+            if isinstance(f_val, GoDataString):
+                build += f'{f_name}: "{str(f_val)}", '
+            else:
+                build += f"{f_name}: {str(f_val)}, "
+        build = build.removesuffix(", ") + "}"
         return build
 
 
@@ -212,8 +221,11 @@ class GoDataMap(GoData):
     def __str__(self) -> str:
         build = "["
         for key, val in self.entries:
-            build += f"{str(key)}:{str(val)} "
-        build = build.removesuffix(" ") + "]"
+            if isinstance(val, GoDataString):
+                build += f'{key}: "{str(val)}", '
+            else:
+                build += f"{key}: {str(val)}, "
+        build = build.removesuffix(", ") + "]"
         return build
 
 
