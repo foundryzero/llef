@@ -73,6 +73,7 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 | rebase_addresses        | Boolean | Enable/disable address rebase output               |
 | rebase_offset           | Int     | Set the rebase offset (default 0x100000)           |
 | show_all_registers      | Boolean | Enable/disable extended register output            |
+| displayed_registers     | List    | Comma separated list of registers to display. Order is preserved. Use `default` as a placeholder for the built-in registers. e.g. `llefsettings set displayed_registers default,ymm0,ymm1` |
 | enable_darwin_heap_scan | Boolean | Enable/disable more accurate heap scanning for Darwin-based platforms. Uses the Darwin malloc introspection API, executing code in the address space of the target application using LLDB's evaluation engine |
 | max_trace_length        | Int     | Set the maximum length of the call stack backtrace to display                                        |
 | stack_view_size         | Int     | Set the number of entries in the stack read to display                                               |

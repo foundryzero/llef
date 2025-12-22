@@ -1,7 +1,7 @@
 """Global settings module"""
 
 import os
-from typing import Union
+from typing import List, Union
 
 from lldb import SBDebugger
 
@@ -73,6 +73,11 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
     @property
     def show_all_registers(self) -> bool:
         return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "show_all_registers", fallback=False)
+
+    @property
+    def displayed_registers(self) -> List[str]:
+        displayed_str = self._RAW_CONFIG.get(self.GLOBAL_SECTION, "displayed_registers", fallback=None)
+        return displayed_str.split(",") if displayed_str is not None else None
 
     @property
     def output_order(self) -> str:
