@@ -310,6 +310,11 @@ class ContextHandler:
             for reg in self.arch().flag_registers:
                 if reg.name in register_list:
                     register_list.remove(reg.name)
+        elif self.settings.displayed_registers is not None:
+            register_list = self.settings.displayed_registers
+            if "default" in register_list:
+                default_id = register_list.index("default")
+                register_list = register_list[:default_id] + self.arch().gpr_registers + register_list[default_id + 1 :]
         else:
             register_list = self.arch().gpr_registers
 
