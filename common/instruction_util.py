@@ -3,7 +3,7 @@ from re import Match
 
 from lldb import SBAddress, SBInstruction, SBTarget
 
-from arch import BaseArch, I386, X86_64
+from arch import I386, X86_64, BaseArch
 from common.color_settings import LLEFColorSettings
 from common.golang.analysis import go_annotate_jumps
 from common.golang.util import go_context_analysis
