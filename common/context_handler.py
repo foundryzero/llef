@@ -364,7 +364,9 @@ class ContextHandler:
 
         output_line(f"{filename}'{function_name}:")
 
-        pre_instructions = extract_instructions(self.target, function_start, pc - 1, self.state.disassembly_syntax)[-3:]
+        pre_instructions = extract_instructions(
+            self.target, self.arch, function_start, pc - 1, self.state.disassembly_syntax
+        )[-3:]
         print_instructions(
             self.target,
             pre_instructions,
@@ -381,7 +383,7 @@ class ContextHandler:
         disassembly_end_address = min(frame_end_address, max_disassembly_end_address)
 
         post_instructions = extract_instructions(
-            self.target, pc, disassembly_end_address, self.state.disassembly_syntax
+            self.target, self.arch, pc, disassembly_end_address, self.state.disassembly_syntax
         )
 
         if len(post_instructions) > 0:
