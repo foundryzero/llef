@@ -26,7 +26,7 @@ def extract_instructions(
     current = start_address
     while current <= end_address:
         address = SBAddress(current, target)
-        if isinstance(arch, I386) or isinstance(arch, X86_64):
+        if arch is I386 or arch is X86_64:
             instruction = target.ReadInstructions(address, 1, disassembly_flavour).GetInstructionAtIndex(0)
         else:
             instruction = target.ReadInstructions(address, 1).GetInstructionAtIndex(0)
