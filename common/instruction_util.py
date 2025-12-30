@@ -3,6 +3,7 @@ from re import Match
 
 from lldb import SBAddress, SBInstruction, SBTarget
 
+from arch import I386, X86_64, BaseArch
 from common.color_settings import LLEFColorSettings
 from common.golang.analysis import go_annotate_jumps
 from common.golang.util import go_context_analysis
@@ -11,7 +12,7 @@ from common.settings import LLEFSettings
 
 
 def extract_instructions(
-    target: SBTarget, start_address: int, end_address: int, disassembly_flavour: str
+    target: SBTarget, arch: BaseArch, start_address: int, end_address: int, disassembly_flavour: str
 ) -> list[SBInstruction]:
     """
     Returns a list of instructions between a range of memory address defined by @start_address and @end_address.
@@ -25,7 +26,10 @@ def extract_instructions(
     current = start_address
     while current <= end_address:
         address = SBAddress(current, target)
-        instruction = target.ReadInstructions(address, 1, disassembly_flavour).GetInstructionAtIndex(0)
+        if arch is I386 or arch is X86_64:
+            instruction = target.ReadInstructions(address, 1, disassembly_flavour).GetInstructionAtIndex(0)
+        else:
+            instruction = target.ReadInstructions(address, 1).GetInstructionAtIndex(0)
         instructions.append(instruction)
         instruction_size = instruction.GetByteSize()
         if instruction_size > 0:
