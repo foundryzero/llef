@@ -30,20 +30,12 @@ from commands.golang import (
     GolangUnpackTypeCommand,
 )
 from commands.hexdump import HexdumpCommand
-from commands.pattern import (
-    PatternContainer,
-    PatternCreateCommand,
-    PatternSearchCommand,
-)
+from commands.pattern import PatternContainer, PatternCreateCommand, PatternSearchCommand
 from commands.scan import ScanCommand
 from commands.settings import SettingsCommand
 from commands.xinfo import XinfoCommand
 from common.state import LLEFState
-from common.util import (
-    lldb_version_to_clang,
-    parse_apple_clang_version_string,
-    parse_llvm_version_string,
-)
+from common.util import lldb_version_to_clang, parse_apple_clang_version_string, parse_llvm_version_string
 from handlers.stop_hook import StopHookHandler
 
 
@@ -88,13 +80,9 @@ def __lldb_init_module(debugger: SBDebugger, _: dict[Any, Any]) -> None:
         elif version := parse_llvm_version_string(debugger.GetVersionString()):
             LLEFState.version = lldb_version_to_clang(version)
         else:
-            raise ValueError(
-                f"Unable to parse LLDB version string: {debugger.GetVersionString()}"
-            )
+            raise ValueError(f"Unable to parse LLDB version string: {debugger.GetVersionString()}")
     else:
         if version := parse_llvm_version_string(debugger.GetVersionString()):
             LLEFState.version = version
         else:
-            raise ValueError(
-                f"Unable to parse LLDB version string: {debugger.GetVersionString()}"
-            )
+            raise ValueError(f"Unable to parse LLDB version string: {debugger.GetVersionString()}")
