@@ -1,6 +1,7 @@
 """Utility functions."""
 
 import os
+import re
 import shutil
 from argparse import ArgumentTypeError
 from collections.abc import Callable
@@ -490,3 +491,29 @@ def find_darwin_heap_regions(process: SBProcess) -> Union[list[tuple[int, int]],
         return None
 
     return heap_regions
+
+
+def parse_llvm_version_string(version: str) -> Union[list[int], None]:
+    """
+    Parse the version string for an LLDB version built from the official LLVM sources
+    (e.g. 'lldb version 16.0.0').
+
+    :param version: The version string to parse.
+    :return: A list of integers representing the version, or None if parsing failed.
+    """
+    if match := re.search(r"lldb version\s+([\d.]+)", version):
+        return [int(x) for x in match.group(1).split(".")]
+    return None
+
+
+def parse_apple_clang_version_string(version: str) -> Union[list[int], None]:
+    """
+    Parse the version string for an LLDB version shipped with Apple Clang
+    (e.g. 'lldb-1600.0.36.3').
+
+    :param version: The version string to parse.
+    :return: A list of integers representing the version, or None if parsing failed.
+    """
+    if match := re.search(r"lldb-(\d+[\d.]+)", version):
+        return [int(x) for x in match.group(1).split(".")]
+    return None
