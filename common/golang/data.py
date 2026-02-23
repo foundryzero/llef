@@ -239,3 +239,13 @@ class GoDataPointer(GoData):
 
     def __str__(self) -> str:
         return hex(self.address)
+
+
+@dataclass(frozen=True)
+class GoDataNilInterface(GoData):
+    """
+    An interface set to nil.
+    """
+
+    def __str__(self) -> str:
+        return "<nil interface>"

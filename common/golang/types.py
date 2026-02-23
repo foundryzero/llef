@@ -32,6 +32,7 @@ from common.golang.data import (
     GoDataString,
     GoDataStruct,
     GoDataUnparsed,
+    GoDataNilInterface
 )
 from common.golang.util_stateless import entropy, rate_candidate_length, read_varint
 
@@ -273,7 +274,7 @@ class GoTypeInt(GoType):
     def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
         val = safe_read_unsigned(info, addr, info.ptr_size)
         if val is not None:
-            sign_bit = 1 << (info.ptr_size - 1)
+            sign_bit = 1 << ((info.ptr_size * 8) - 1)
             # convert unsigned to signed
             val -= (val & sign_bit) << 1
             return GoDataInteger(heuristic=Confidence.CERTAIN.to_float(), value=val)
@@ -692,12 +693,21 @@ class GoTypeInterface(GoType):
                 fail_nicely = True
                 type_ptr = safe_read_unsigned(info, itab_ptr + info.ptr_size, info.ptr_size)
 
-        # Treat this like dereferencing a typed pointer.
         if type_ptr is not None:
-            header = TypeHeader()
-            extractor = GoTypePointer(header=header, version=self.version)
-            extractor.child_type = info.type_structs.get(type_ptr)
-            extracted = extractor.extract_at(info, addr + info.ptr_size, dereferenced_pointers, depth)
+            # Treat this like dereferencing a typed pointer.
+            if type_ptr > 0:
+                interface_type = info.type_structs.get(type_ptr)
+                if interface_type is not None:
+                    data_pointer = safe_read_unsigned(info, addr + info.ptr_size, info.ptr_size)
+                    if data_pointer is not None:
+                        extracted = interface_type.extract_at(info, data_pointer, dereferenced_pointers, depth)
+                    else: 
+                        extracted = GoDataBad(heuristic=Confidence.JUNK.to_float())
+                else:
+                    extracted = GoDataBad(heuristic=Confidence.JUNK.to_float())
+            else:
+                # Nil interface
+                extracted = GoDataNilInterface(heuristic=Confidence.HIGH.to_float())
 
         if extracted is None:
             if fail_nicely:
@@ -778,23 +788,22 @@ class GoTypePointer(GoType):
         extracted: Union[GoData, None] = None
 
         if self.child_type:
-            child_ptr = safe_read_unsigned(info, addr, info.ptr_size)
-            if child_ptr is not None:
-                if child_ptr > 0:
-                    if child_ptr not in dereferenced_pointers:
-                        dereferenced_pointers.add(child_ptr)
+            if addr is not None:
+                if addr > 0:
+                    if addr not in dereferenced_pointers:
+                        dereferenced_pointers.add(addr)
                         # changes to dereferenced_pointers are reflected everywhere, so we'll never dereference again
                         # in this extraction.
                         # this is good because we can reduce duplication of displayed information.
-                        dereferenced = self.child_type.extract_at(info, child_ptr, dereferenced_pointers, depth)
+                        dereferenced = self.child_type.extract_at(info, addr, dereferenced_pointers, depth)
                         if not isinstance(dereferenced, GoDataBad):
                             extracted = dereferenced
                         else:
                             # Then this pointer is not of this type - either memory does not exist, or data is illegal.
-                            extracted = GoDataPointer(heuristic=Confidence.JUNK.to_float(), address=child_ptr)
+                            extracted = GoDataPointer(heuristic=Confidence.JUNK.to_float(), address=addr)
                     else:
                         # Circular references. Slightly downgrade confidence.
-                        extracted = GoDataUnparsed(heuristic=Confidence.HIGH.to_float(), address=child_ptr)
+                        extracted = GoDataUnparsed(heuristic=Confidence.HIGH.to_float(), address=addr)
                 else:
                     # A valid, but null, pointer. Of course these come up - but downgrade the confidence.
                     extracted = GoDataPointer(heuristic=Confidence.MEDIUM.to_float(), address=0)
@@ -1053,9 +1062,8 @@ class GoTypeUnsafePointer(GoType):
         return "unsafe.Pointer"
 
     def extract_at(self, info: ExtractInfo, addr: pointer, dereferenced_pointers: set[pointer], depth: int) -> GoData:
-        child_ptr = safe_read_unsigned(info, addr, info.ptr_size)
-        if child_ptr is not None:
-            return GoDataPointer(heuristic=Confidence.CERTAIN.to_float(), address=child_ptr)
+        if addr is not None:
+            return GoDataPointer(heuristic=Confidence.CERTAIN.to_float(), address=addr)
         return GoDataBad(heuristic=Confidence.JUNK.to_float())
 
 
