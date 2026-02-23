@@ -27,12 +27,12 @@ from common.golang.data import (
     GoDataFloat,
     GoDataInteger,
     GoDataMap,
+    GoDataNilInterface,
     GoDataPointer,
     GoDataSlice,
     GoDataString,
     GoDataStruct,
     GoDataUnparsed,
-    GoDataNilInterface
 )
 from common.golang.util_stateless import entropy, rate_candidate_length, read_varint
 
@@ -455,7 +455,7 @@ class GoTypeArray(GoType):
     length: int
 
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
-        (sub_elem, sup_slice, this_len) = struct.unpack_from("<" + info.ptr_specifier * 3, type_section, offset)
+        sub_elem, sup_slice, this_len = struct.unpack_from("<" + info.ptr_specifier * 3, type_section, offset)
         self.child_addr = sub_elem
         self.length = this_len
         return [sub_elem, sup_slice]
@@ -517,7 +517,7 @@ class GoTypeChan(GoType):
     direction: int
 
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
-        (sub_elem, direction) = struct.unpack_from("<" + info.ptr_specifier * 2, type_section, offset)
+        sub_elem, direction = struct.unpack_from("<" + info.ptr_specifier * 2, type_section, offset)
         self.child_addr = sub_elem
         self.direction = direction
         return [sub_elem]
@@ -553,7 +553,7 @@ class GoTypeFunc(GoType):
 
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[int], None]:
         # the size of param count fields and the uncommon offset addition is NOT pointer size dependent.
-        (num_param_in, num_param_out) = struct.unpack_from("<HH", type_section, offset)
+        num_param_in, num_param_out = struct.unpack_from("<HH", type_section, offset)
 
         # We consumed 32 bits. On 32-bit, read the next byte: on 64-bit, need 32 bits of padding.
         offset += info.ptr_size
@@ -626,8 +626,8 @@ class GoTypeInterface(GoType):
 
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[pointer], None]:
         self.methods = []
-        (go_min_version, _) = self.version
-        (methods_base, methods_len) = struct.unpack_from(
+        go_min_version, _ = self.version
+        methods_base, methods_len = struct.unpack_from(
             "<" + info.ptr_specifier * 2, type_section, offset + info.ptr_size
         )
         # Each method structure in the methods table is a struct of two 32-bit integers.
@@ -635,7 +635,7 @@ class GoTypeInterface(GoType):
             imethod_ptr = methods_base + i * 8
             if info.types <= imethod_ptr < info.etypes:
                 imethod_offset = imethod_ptr - info.types
-                (name_off, type_off) = struct.unpack_from("<II", type_section, imethod_offset)
+                name_off, type_off = struct.unpack_from("<II", type_section, imethod_offset)
 
                 name_off += 1
                 if go_min_version <= 16:
@@ -701,7 +701,7 @@ class GoTypeInterface(GoType):
                     data_pointer = safe_read_unsigned(info, addr + info.ptr_size, info.ptr_size)
                     if data_pointer is not None:
                         extracted = interface_type.extract_at(info, data_pointer, dereferenced_pointers, depth)
-                    else: 
+                    else:
                         extracted = GoDataBad(heuristic=Confidence.JUNK.to_float())
                 else:
                     extracted = GoDataBad(heuristic=Confidence.JUNK.to_float())
@@ -725,7 +725,7 @@ class GoTypeMap(GoType):
     bucket_type: Union[GoType, None]
 
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[pointer], None]:
-        (self.key_addr, self.child_addr, self.bucket_addr) = struct.unpack_from(
+        self.key_addr, self.child_addr, self.bucket_addr = struct.unpack_from(
             "<" + info.ptr_specifier * 3, type_section, offset
         )
         self.key_type = None
@@ -750,7 +750,7 @@ class GoTypeMap(GoType):
         extracted: Union[GoData, None] = None
 
         if self.bucket_type is not None:
-            (go_min_version, _) = self.version
+            go_min_version, _ = self.version
             # Minimum version is only lifted to 24 if we are sure the new map implementation is being used
             # (the programmer can choose to use the old version even in 1.24).
             parser: Union[SwissMapParser, NoSwissMapParser]
@@ -965,8 +965,8 @@ class GoTypeStruct(GoType):
     fields: list[GoTypeStructField]
 
     def populate(self, type_section: bytes, offset: int, info: PopulateInfo) -> Union[list[pointer], None]:
-        (go_min_version, go_max_version) = self.version
-        (_, fields_addr, fields_len) = struct.unpack_from("<" + info.ptr_specifier * 3, type_section, offset)
+        go_min_version, go_max_version = self.version
+        _, fields_addr, fields_len = struct.unpack_from("<" + info.ptr_specifier * 3, type_section, offset)
         self.fields = []
 
         for i in range(fields_len):
@@ -974,7 +974,7 @@ class GoTypeStruct(GoType):
             addr = fields_addr + i * 3 * info.ptr_size
             if info.types <= addr < info.etypes:
                 field_struct_offset = addr - info.types
-                (field_name_ptr, field_type, field_offset) = struct.unpack_from(
+                field_name_ptr, field_type, field_offset = struct.unpack_from(
                     "<" + info.ptr_specifier * 3, type_section, field_struct_offset
                 )
 
@@ -1384,7 +1384,7 @@ class SwissMapParser:
                                     entries = None
                                     break
                                 # The next line is well-typed because if entries is None, then we already broke.
-                                entries.extend(from_table)  # type:ignore[union-attr]
+                                entries.extend(from_table)  # type: ignore[union-attr]
 
                     if entries is not None and len(entries) > 0:
                         # A valid map.

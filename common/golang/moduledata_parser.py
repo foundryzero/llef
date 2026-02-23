@@ -55,7 +55,7 @@ class ModuleDataParser:
         # Check that pointer + offset doesn't exceed the end pointer for the types section.
         if self.types + name_offset < self.etypes:
             # Module data layout depends on the Go version.
-            (go_min_version, go_max_version) = LLEFState.go_state.pclntab_info.version_bounds
+            go_min_version, go_max_version = LLEFState.go_state.pclntab_info.version_bounds
             if go_min_version >= 17:
                 length, name_offset = read_varint(type_section, name_offset)
                 if self.types + name_offset + length <= self.etypes:
@@ -166,7 +166,7 @@ class ModuleDataParser:
 
         offsets = None
 
-        (min_go, max_go) = LLEFState.go_state.pclntab_info.version_bounds
+        min_go, max_go = LLEFState.go_state.pclntab_info.version_bounds
         if min_go == 7 and max_go == 7:
             offsets = GO_MD_7_ONLY
         if min_go >= 8 and max_go <= 15:

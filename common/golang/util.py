@@ -108,7 +108,7 @@ def go_find_func_name_offset(pc: int) -> tuple[str, int]:
     """
     record = go_find_func(pc)
     if record is not None:
-        (entry, gofunc) = record
+        entry, gofunc = record
         return (gofunc.name, pc - entry)
 
     # otherwise, gracefully fail for display purposes

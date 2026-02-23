@@ -119,7 +119,7 @@ class GolangFindFuncCommand(BaseCommand):
                     address = int(address_or_name, 0)
                     function_mapping = go_find_func(address)
                     if function_mapping is not None:
-                        (entry, gofunc) = function_mapping
+                        entry, gofunc = function_mapping
                         output_line(f"{hex(entry)} - {gofunc.name} (file address = {hex(gofunc.file_addr)})")
                     else:
                         print_message(MSG_TYPE.ERROR, f"Could not find function containing address {hex(address)}")

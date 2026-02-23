@@ -131,7 +131,7 @@ def go_get_function_from_pc(pc: pointer, function_start: pointer, function_name:
     """
     record = go_find_func(pc)
     if record is not None:
-        (entry, gofunc) = record
+        entry, gofunc = record
         return (entry, gofunc.name)
     return (function_start, function_name)
 
@@ -335,7 +335,7 @@ def go_annotate_pointer_line(
                         LLEFState.go_state.type_guesses.add(object_ptr, referenced_type_struct)
                         unpacked_data = attempt_object_unpack(proc, object_ptr, settings, col_settings)
                         if unpacked_data:
-                            (_, next_pointer_unpacked) = unpacked_data
+                            _, next_pointer_unpacked = unpacked_data
 
                 # Markup line with identified Go data type.
                 go_type_name = color_string(referenced_type_struct.header.name, col_settings.go_type_color)
@@ -351,7 +351,7 @@ def go_annotate_pointer_line(
                 unpacked_data = attempt_object_unpack(proc, pointer_to_annotate, settings, col_settings)
                 object_at_pointer = None
                 if unpacked_data:
-                    (resolved_type, object_at_pointer) = unpacked_data
+                    resolved_type, object_at_pointer = unpacked_data
                 if object_at_pointer:
                     line += f" {GLYPHS.RIGHT_ARROW.value} {resolved_type} {object_at_pointer}"
 
@@ -420,7 +420,7 @@ def go_stop_hook(exe_ctx: SBExecutionContext, arch: BaseArch, settings: LLEFSett
         return
 
     arg_registers = get_arg_registers(arch)
-    (go_min_version, _) = LLEFState.go_state.pclntab_info.version_bounds
+    go_min_version, _ = LLEFState.go_state.pclntab_info.version_bounds
     if go_min_version >= 17:
         # HOOK TASK 1:
         # Register-straddling interface/string guessing. Needs register-based calling convention (Go >= 1.17).
@@ -452,7 +452,7 @@ def go_stop_hook(exe_ctx: SBExecutionContext, arch: BaseArch, settings: LLEFSett
         pc = frame.GetPC()
         record = go_find_func(pc)
         if record is not None and LLEFState.go_state.moduledata_info is not None:
-            (entry, gofunc) = record
+            entry, gofunc = record
             if entry != LLEFState.go_state.prev_func:
                 LLEFState.go_state.prev_func = entry
                 # Either this function was just called, or we stopped in the middle of it.
