@@ -226,7 +226,7 @@ class TypeGetter:
                 resolved.key_type = key_type
                 resolved.child_type = val_type
 
-                (go_min_version, _) = self.__version
+                go_min_version, _ = self.__version
                 if go_min_version < 24:
                     # Old map type.
                     bucket_str = (

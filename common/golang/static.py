@@ -30,7 +30,7 @@ def parse_pclntab(proc: SBProcess, target: SBTarget, buf: SBData, file_addr: int
     err = SBError()
     first8bytes = buf.ReadRawData(err, 0, 8)
     if err.Success() and first8bytes is not None:
-        (magic, pad, min_instr_size, ptr_size) = struct.unpack("<IHBB", first8bytes)
+        magic, pad, min_instr_size, ptr_size = struct.unpack("<IHBB", first8bytes)
 
         parser = PCLnTabParser(file_addr, magic, pad, min_instr_size, ptr_size)
 
