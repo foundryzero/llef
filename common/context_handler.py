@@ -489,8 +489,9 @@ class ContextHandler:
                 line += get_frame_arguments(
                     current_frame, frame_argument_name_color=TERM_COLORS[self.color_settings.frame_argument_name_color]
                 )
-
-        output_line(line)
+                output_line(line)
+        else:
+            output_line(line)
 
     def load_disassembly_syntax(self, debugger: SBDebugger) -> None:
         """Load the disassembly flavour from LLDB into LLEF's state."""
