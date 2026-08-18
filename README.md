@@ -151,16 +151,16 @@ e.g.
 0x7fffffffecc8│+0000: 0x6857
 ```
 
-#### Telescope
+#### Dereference
 
-Alias for `dereference`. View memory at consecutive addresses, with pointer values colored
+View memory at consecutive addresses, with pointer values colored
 according to the type of memory they point to (code/stack/heap):
 ```
-(lldb) telescope address [-l lines]
+(lldb) dereference address [-l lines]
 ```
 Press enter to page forward through memory. The command detects when repeated and automatically advances:
 ```
-(lldb) telescope 0x7fffffffecc8 -l 8
+(lldb) dereference 0x7fffffffecc8 -l 8
 0x7fffffffecc8│+0000: 0x00007ffff7fc3000 -> ...
 0x7fffffffecd0│+0008: 0x0000555555556004 -> ...
 ...
@@ -168,7 +168,7 @@ Press enter to page forward through memory. The command detects when repeated an
 0x7fffffffecd8│+0010: 0x... -> ...
 ```
 To show heap allocation boundaries (Darwin only), enable both `enable_darwin_heap_scan` and
-`dereference_show_heap_boundaries` settings.
+`dereference_show_heap_boundaries` settings. Has the alias `telescope` to match PEDA.
 
 #### Context
 
