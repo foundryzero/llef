@@ -16,8 +16,8 @@ from lldb import (
     SBTarget,
 )
 
-from commands.base_command import BaseCommand
 from arch import I386, X86_64
+from commands.base_command import BaseCommand
 from common.color_settings import LLEFColorSettings
 from common.constants import GLYPHS, MSG_TYPE, TERM_COLORS
 from common.context_handler import ContextHandler
@@ -70,7 +70,7 @@ class DereferenceCommand(BaseCommand):
             type=hex_int,
             nargs="?",
             default=None,
-            help="A value/address/symbol used as the location to print the dereference from. If omitted, continues from last position.",
+            help="A value/address/symbol to print the dereference from. If omitted, continues from last position.",
         )
         return parser
 
@@ -226,6 +226,7 @@ class DereferenceCommand(BaseCommand):
         allocation_map = {}
         if self.settings.dereference_show_heap_boundaries:
             from common.output_util import print_line
+
             allocation_map = self.context_handler.darwin_allocation_map(start_address, lines, address_size)
 
         end_address = start_address + address_size * lines
@@ -236,7 +237,6 @@ class DereferenceCommand(BaseCommand):
             if self.settings.dereference_show_heap_boundaries and allocation_map:
                 current_allocation = allocation_map.get(address)
                 if not first_line and current_allocation != previous_allocation:
-                    from common.output_util import print_line
                     print_line()
                 previous_allocation = current_allocation
                 first_line = False

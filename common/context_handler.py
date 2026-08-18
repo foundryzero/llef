@@ -20,7 +20,7 @@ from lldb import (
 from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
 from common.color_settings import LLEFColorSettings
-from common.constants import GLYPHS, SIZES, TERM_COLORS
+from common.constants import GLYPHS, TERM_COLORS
 from common.golang.analysis import (
     go_annotate_pointer_line,
     go_get_backtrace,
