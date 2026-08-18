@@ -20,7 +20,7 @@ from lldb import (
 from arch import get_arch, get_arch_from_str
 from arch.base_arch import BaseArch, FlagRegister
 from common.color_settings import LLEFColorSettings
-from common.constants import GLYPHS, TERM_COLORS
+from common.constants import GLYPHS, SIZES, TERM_COLORS
 from common.golang.analysis import (
     go_annotate_pointer_line,
     go_get_backtrace,
@@ -42,6 +42,7 @@ from common.state import LLEFState
 from common.util import (
     address_to_filename,
     attempt_to_read_string_from_memory,
+    find_darwin_allocation_sizes,
     find_darwin_heap_regions,
     find_stack_regions,
     get_frame_arguments,
@@ -220,6 +221,37 @@ class ContextHandler:
 
             output_line(line)
 
+    def pointer_type_color(self, value: int) -> Union[str, None]:
+        """Return color for @value based on whether it points to code, stack or heap"""
+        if is_code(value, self.process, self.target, self.regions):
+            return self.color_settings.code_color
+        if is_stack(value, self.regions, self.darwin_stack_regions):
+            return self.color_settings.stack_color
+        if is_heap(value, self.target, self.regions, self.darwin_stack_regions, self.darwin_heap_regions):
+            return self.color_settings.heap_color
+        return None
+
+    def darwin_allocation_map(self, base_addr: int, count: int, step: int) -> dict[int, Union[int, None]]:
+        """Map addresses to their containing heap allocation start, for drawing separators between allocations"""
+        if LLEFState.platform != "Darwin" or not self.settings.enable_darwin_heap_scan:
+            return {}
+
+        sizes = find_darwin_allocation_sizes(self.process, base_addr, count, step)
+
+        allocation_map: dict[int, Union[int, None]] = {}
+        current_start: Union[int, None] = None
+        current_end = 0
+        for i, size in enumerate(sizes):
+            addr = base_addr + i * step
+            if size > 0:
+                current_start = addr
+                current_end = addr + size
+            if current_start is not None and addr < current_end:
+                allocation_map[addr] = current_start
+            else:
+                allocation_map[addr] = None
+        return allocation_map
+
     def print_register(self, register: SBValue) -> None:
         """Print details of a @register"""
         reg_name = register.GetName()
@@ -232,14 +264,7 @@ class ContextHandler:
             # Register value has changed so highlight
             highlight = self.color_settings.modified_register_color
 
-        if is_code(reg_value, self.process, self.target, self.regions):
-            color = self.color_settings.code_color
-        elif is_stack(reg_value, self.regions, self.darwin_stack_regions):
-            color = self.color_settings.stack_color
-        elif is_heap(reg_value, self.target, self.regions, self.darwin_stack_regions, self.darwin_heap_regions):
-            color = self.color_settings.heap_color
-        else:
-            color = None
+        color = self.pointer_type_color(reg_value)
         formatted_reg_value = f"{reg_value:x}".ljust(12)
         line = color_string(reg_name.ljust(7), highlight, "", ": ")
         line += color_string(f"0x{formatted_reg_value}", color)

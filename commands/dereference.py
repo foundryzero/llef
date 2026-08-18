@@ -17,10 +17,12 @@ from lldb import (
 )
 
 from commands.base_command import BaseCommand
+from arch import I386, X86_64
 from common.color_settings import LLEFColorSettings
-from common.constants import GLYPHS, TERM_COLORS
+from common.constants import GLYPHS, MSG_TYPE, TERM_COLORS
 from common.context_handler import ContextHandler
-from common.output_util import color_string, output_line
+from common.output_util import color_string, output_line, print_message
+from common.settings import LLEFSettings
 from common.state import LLEFState
 from common.util import attempt_to_read_string_from_memory, check_process, hex_int, hex_or_str, is_code, positive_int
 
@@ -31,12 +33,18 @@ class DereferenceCommand(BaseCommand):
     program: str = "dereference"
     container = None
     context_handler: Union[ContextHandler, None] = None
+    alias_set = {"telescope": ""}
+    last_address: Union[int, None] = None
+    last_base: Union[int, None] = None
+    last_lines: int = 10
+    last_command: str = ""
 
     def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
         self.parser = self.get_command_parser()
         self.context_handler = ContextHandler(debugger)
         self.color_settings = LLEFColorSettings()
+        self.settings = LLEFSettings(debugger)
         self.state = LLEFState()
 
     @classmethod
@@ -60,7 +68,9 @@ class DereferenceCommand(BaseCommand):
         parser.add_argument(
             "address",
             type=hex_int,
-            help="A value/address/symbol used as the location to print the dereference from",
+            nargs="?",
+            default=None,
+            help="A value/address/symbol used as the location to print the dereference from. If omitted, continues from last position.",
         )
         return parser
 
@@ -83,7 +93,10 @@ class DereferenceCommand(BaseCommand):
         :return: An object of the disassembled instruction.
         """
         instruction_address = SBAddress(address, target)
-        instruction_list = target.ReadInstructions(instruction_address, 1, self.state.disassembly_syntax)
+        if self.context_handler.arch is I386 or self.context_handler.arch is X86_64:
+            instruction_list = target.ReadInstructions(instruction_address, 1, self.state.disassembly_syntax)
+        else:
+            instruction_list = target.ReadInstructions(instruction_address, 1)
         return instruction_list.GetInstructionAtIndex(0)
 
     def dereference_last_address(
@@ -157,7 +170,16 @@ class DereferenceCommand(BaseCommand):
             output += f"+0x{offset:04x}: "
         else:
             output += f"-0x{-offset:04x}: "
-        output += " -> ".join(map(hex_or_str, result[1:]))
+
+        colored_chain = []
+        for item in result[1:]:
+            if isinstance(item, int):
+                color = self.context_handler.pointer_type_color(item)
+                colored_chain.append(color_string(hex_or_str(item), color))
+            else:
+                colored_chain.append(item)
+
+        output += " -> ".join(colored_chain)
         output_line(output)
 
     @check_process
@@ -172,12 +194,27 @@ class DereferenceCommand(BaseCommand):
 
         args = self.parser.parse_args(shlex.split(command))
 
-        start_address = args.address
-        lines = args.lines
-        if args.base:
-            base = args.base
+        if args.address is None:
+            if DereferenceCommand.last_address is None:
+                print_message(MSG_TYPE.ERROR, "No address specified and no previous command to continue from")
+                return
+            address_size = exe_ctx.target.GetAddressByteSize()
+            start_address = DereferenceCommand.last_address + (address_size * DereferenceCommand.last_lines)
+            base = DereferenceCommand.last_base
+            lines = DereferenceCommand.last_lines
         else:
-            base = start_address
+            if command == DereferenceCommand.last_command and DereferenceCommand.last_address is not None:
+                address_size = exe_ctx.target.GetAddressByteSize()
+                start_address = DereferenceCommand.last_address + (address_size * DereferenceCommand.last_lines)
+                base = DereferenceCommand.last_base
+                lines = DereferenceCommand.last_lines
+            else:
+                start_address = args.address
+                lines = args.lines
+                if args.base:
+                    base = args.base
+                else:
+                    base = start_address
 
         if self.context_handler is None:
             raise AttributeError("Class not properly initialised: self.context_handler is None")
@@ -186,8 +223,29 @@ class DereferenceCommand(BaseCommand):
 
         address_size = exe_ctx.target.GetAddressByteSize()
 
+        allocation_map = {}
+        if self.settings.dereference_show_heap_boundaries:
+            from common.output_util import print_line
+            allocation_map = self.context_handler.darwin_allocation_map(start_address, lines, address_size)
+
         end_address = start_address + address_size * lines
+        previous_allocation = None
+        first_line = True
+
         for address in range(start_address, end_address, address_size):
+            if self.settings.dereference_show_heap_boundaries and allocation_map:
+                current_allocation = allocation_map.get(address)
+                if not first_line and current_allocation != previous_allocation:
+                    from common.output_util import print_line
+                    print_line()
+                previous_allocation = current_allocation
+                first_line = False
+
             offset = address - base
             deref_result = self.dereference(address, exe_ctx.target, exe_ctx.process, self.context_handler.regions)
             self.print_dereference_result(deref_result, offset)
+
+        DereferenceCommand.last_address = start_address
+        DereferenceCommand.last_base = base
+        DereferenceCommand.last_lines = lines
+        DereferenceCommand.last_command = command
