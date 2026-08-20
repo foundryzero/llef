@@ -20,6 +20,7 @@ from lldb import (
     SBValue,
     eLanguageTypeObjC_plus_plus,
     eNoDynamicValues,
+    eSectionTypeCode,
 )
 
 from common.constants import DEFAULT_TERMINAL_COLUMNS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
@@ -178,6 +179,22 @@ def is_in_section(address: int, target: SBTarget, target_section_name: str) -> b
     return target_section_name in full_section_name
 
 
+def is_code_section(address: int, target: SBTarget) -> bool:
+    """
+    Determines whether a given memory @address resides in a section that holds executable code.
+
+    This distinguishes genuine code sections (e.g. '__text', '.text') from non-code sections that
+    share an executable segment (e.g. Mach-O '__cstring' / '__const'), which must not be disassembled.
+
+    :param address: The memory address to check.
+    :param target: The target object file.
+    :return: A boolean of the check.
+    """
+    sb_address = target.ResolveLoadAddress(address)
+    section = sb_address.GetSection()
+    return section.IsValid() and section.GetSectionType() == eSectionTypeCode
+
+
 def is_text_region(address: int, target: SBTarget, region: SBMemoryRegionInfo) -> bool:
     """
     Determines if a given memory @address if within a '.text' section of the target executable.
@@ -200,6 +217,20 @@ def is_text_region(address: int, target: SBTarget, region: SBMemoryRegionInfo) -
             in_text = True
 
     return in_text
+
+
+def is_module_image(address: int, target: SBTarget) -> bool:
+    """
+    Determines whether an @address resides in a loaded module image (the main executable or a
+    shared library, any section), as opposed to anonymous mappings such as the stack or heap.
+
+    :param address: The memory address to check.
+    :param target: The target object file.
+    :return: A boolean of the check.
+    """
+    # Module-backed addresses have a real file behind them; anonymous regions do not.
+    module = SBAddress(address, target).GetModule()
+    return module.IsValid() and module.GetFileSpec().GetFilename() is not None
 
 
 def is_code(address: int, process: SBProcess, target: SBTarget, regions: Union[SBMemoryRegionInfoList, None]) -> bool:

@@ -24,7 +24,14 @@ from common.context_handler import ContextHandler
 from common.output_util import color_string, output_line, print_message
 from common.settings import LLEFSettings
 from common.state import LLEFState
-from common.util import attempt_to_read_string_from_memory, check_process, hex_int, hex_or_str, is_code, positive_int
+from common.util import (
+    attempt_to_read_string_from_memory,
+    check_process,
+    hex_int,
+    hex_or_str,
+    is_code_section,
+    positive_int,
+)
 
 
 class DereferenceCommand(BaseCommand):
@@ -99,6 +106,24 @@ class DereferenceCommand(BaseCommand):
             instruction_list = target.ReadInstructions(instruction_address, 1)
         return instruction_list.GetInstructionAtIndex(0)
 
+    def read_symbol_name(self, target: SBTarget, address: int) -> Union[str, None]:
+        """
+        Resolve @address to a <symbol> or <symbol+offset> string, or None if no symbol is known.
+
+        :param target: The target object file.
+        :param address: The memory address to resolve.
+        :return: A <symbol> / <symbol+offset> string, or None.
+        """
+        sb_address = SBAddress(address, target)
+        symbol = sb_address.symbol
+        if not symbol.IsValid():
+            return None
+        name = symbol.GetName()
+        if name is None:
+            return None
+        offset = address - symbol.GetStartAddress().GetLoadAddress(target)
+        return f"<{name}+{offset}>" if offset else f"<{name}>"
+
     def dereference_last_address(
         self,
         data: list[Union[int, str]],
@@ -107,8 +132,8 @@ class DereferenceCommand(BaseCommand):
         regions: Union[SBMemoryRegionInfoList, None],
     ) -> None:
         """
-        Memory data at the last address (second to last in @data list) is
-        either disassembled to an instruction or converted to a string or neither.
+        Resolve the last address (second to last in @data list) to a symbol, instruction or
+        string and render the end of the chain according to the `dereference_print` setting.
 
         :param data: List of memory addresses/data.
         :param target: The target object file.
@@ -116,20 +141,51 @@ class DereferenceCommand(BaseCommand):
         :param regions: List of memory regions of the process.
         """
         last_address = data[-2]
-        if isinstance(last_address, str):
+        # Skip pre-rendered markers such as "[LOOPING]"; there is nothing to resolve.
+        if isinstance(last_address, str) or isinstance(data[-1], str):
             return
 
-        if is_code(last_address, process, target, regions):
-            instruction = self.read_instruction(target, last_address)
-            if instruction.IsValid():
-                data[-1] = color_string(
-                    f"{instruction.GetMnemonic(target)}{instruction.GetOperands(target)}",
-                    self.color_settings.instruction_color,
-                )
+        # Resolve to a symbol or string. Only genuine code sections are disassembled, so
+        # const/data in an executable module segment is treated as a value.
+        annotation = None
+        if is_code_section(last_address, target):
+            symbol_name = self.read_symbol_name(target, last_address)
+            if symbol_name is not None:
+                # Colour the symbol like a binary pointer to match its address.
+                annotation = color_string(symbol_name, self.color_settings.code_color)
+            else:
+                instruction = self.read_instruction(target, last_address)
+                if instruction.IsValid():
+                    annotation = color_string(
+                        f"{instruction.GetMnemonic(target)}{instruction.GetOperands(target)}",
+                        self.color_settings.instruction_color,
+                    )
         else:
             string = attempt_to_read_string_from_memory(process, last_address)
             if string != "":
-                data[-1] = color_string(string, self.color_settings.string_color)
+                annotation = color_string(f'"{string}"', self.color_settings.string_color)
+
+        if annotation is None:
+            return
+
+        mode = self.settings.dereference_print
+
+        # With no intermediate pointer hop (data[-2] is the address column itself), show the
+        # annotation alone, or leave the raw value in "pointer" mode.
+        if len(data) < 3:
+            if mode != "pointer":
+                data[-1] = annotation
+            return
+
+        # Drop the raw bytes read through last_address and render the resolved pointer.
+        data.pop()
+        if mode == "symbol":
+            data[-1] = annotation
+        elif mode == "pointer":
+            pass  # Leave the raw pointer in place; coloured by print_dereference_result.
+        else:  # "both"
+            pointer_color = self.context_handler.pointer_type_color(last_address)
+            data[-1] = f"{color_string(hex_or_str(last_address), pointer_color)} ({annotation})"
 
     def dereference(
         self, address: int, target: SBTarget, process: SBProcess, regions: Union[SBMemoryRegionInfoList, None]

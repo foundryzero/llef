@@ -50,8 +50,8 @@ from common.util import (
     get_function_info_from_frame,
     get_registers,
     hex_or_str,
-    is_code,
     is_heap,
+    is_module_image,
     is_stack,
 )
 
@@ -222,8 +222,8 @@ class ContextHandler:
             output_line(line)
 
     def pointer_type_color(self, value: int) -> Union[str, None]:
-        """Return color for @value based on whether it points to code, stack or heap"""
-        if is_code(value, self.process, self.target, self.regions):
+        """Return color for @value based on whether it points to the binary image, stack or heap"""
+        if is_module_image(value, self.target):
             return self.color_settings.code_color
         if is_stack(value, self.regions, self.darwin_stack_regions):
             return self.color_settings.stack_color
