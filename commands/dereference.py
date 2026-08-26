@@ -74,10 +74,11 @@ class DereferenceCommand(BaseCommand):
         )
         parser.add_argument(
             "address",
-            type=hex_int,
             nargs="?",
             default=None,
-            help="A value/address/symbol to print the dereference from. If omitted, continues from last position.",
+            help="A value/address/symbol to print the dereference from. Accepts a hex/decimal literal, a"
+            " register/convenience variable (e.g. $rsp), a variable name, or an expression (e.g. nodes,"
+            " &buf). If omitted, continues from last position.",
         )
         return parser
 
@@ -90,6 +91,26 @@ class DereferenceCommand(BaseCommand):
     def get_long_help() -> str:
         """Return a longer help message"""
         return DereferenceCommand.get_command_parser().format_help()
+
+    def resolve_address(self, value: str, exe_ctx: SBExecutionContext) -> Union[int, None]:
+        """
+        Resolve @value to an address. Plain hex/decimal literals are parsed directly; anything else
+        (a register, convenience variable, source variable name, or arbitrary expression) is resolved
+        via LLDB's expression evaluator in the context of the currently selected frame.
+
+        :param value: The raw address argument as typed by the user.
+        :param exe_ctx: The current execution context.
+        :return: The resolved address, or None if @value could not be resolved.
+        """
+        try:
+            return hex_int(value)
+        except ValueError:
+            pass
+
+        address_value = exe_ctx.GetTarget().EvaluateExpression(value)
+        if address_value.GetError().Fail():
+            return None
+        return address_value.GetValueAsUnsigned()
 
     def read_instruction(self, target: SBTarget, address: int) -> SBInstruction:
         """
@@ -265,7 +286,11 @@ class DereferenceCommand(BaseCommand):
                 base = DereferenceCommand.last_base
                 lines = DereferenceCommand.last_lines
             else:
-                start_address = args.address
+                resolved_address = self.resolve_address(args.address, exe_ctx)
+                if resolved_address is None:
+                    print_message(MSG_TYPE.ERROR, f"Could not resolve address argument: {args.address}")
+                    return
+                start_address = resolved_address
                 lines = args.lines
                 if args.base:
                     base = args.base
