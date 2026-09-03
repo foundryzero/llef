@@ -45,6 +45,9 @@ class DereferenceCommand(BaseCommand):
     last_base: Union[int, None] = None
     last_lines: int = 10
     last_command: str = ""
+    # Identifies the process and the stop it was continued from, so that resuming or restarting
+    # the process invalidates the stored position.
+    last_stop_state: Union[tuple[int, int], None] = None
 
     def __init__(self, debugger: SBDebugger, __: dict[Any, Any]) -> None:
         super().__init__()
@@ -91,6 +94,27 @@ class DereferenceCommand(BaseCommand):
     def get_long_help() -> str:
         """Return a longer help message"""
         return DereferenceCommand.get_command_parser().format_help()
+
+    @staticmethod
+    def stop_state(process: SBProcess) -> tuple[int, int]:
+        """
+        Identify the current stop of @process. The unique ID distinguishes one process from the
+        next (e.g. after `run` is issued again) and the stop ID changes every time the process
+        resumes and stops again.
+
+        :param process: The running process of the target.
+        :return: A (process unique ID, stop ID) pair.
+        """
+        return (process.GetUniqueID(), process.GetStopID())
+
+    @classmethod
+    def invalidate_continuation(cls) -> None:
+        """Forget the stored position so the next invocation cannot continue from it."""
+        cls.last_address = None
+        cls.last_base = None
+        cls.last_lines = 10
+        cls.last_command = ""
+        cls.last_stop_state = None
 
     def resolve_address(self, value: str, exe_ctx: SBExecutionContext) -> Union[int, None]:
         """
@@ -271,6 +295,12 @@ class DereferenceCommand(BaseCommand):
 
         args = self.parser.parse_args(shlex.split(command))
 
+        # A stored position is only meaningful for the process and the stop it was taken at, so
+        # drop it if the process has resumed, exited, or been replaced since.
+        stop_state = self.stop_state(exe_ctx.process)
+        if DereferenceCommand.last_stop_state != stop_state:
+            self.invalidate_continuation()
+
         if args.address is None:
             if DereferenceCommand.last_address is None:
                 print_message(MSG_TYPE.ERROR, "No address specified and no previous command to continue from")
@@ -330,3 +360,4 @@ class DereferenceCommand(BaseCommand):
         DereferenceCommand.last_base = base
         DereferenceCommand.last_lines = lines
         DereferenceCommand.last_command = command
+        DereferenceCommand.last_stop_state = self.stop_state(exe_ctx.process)
