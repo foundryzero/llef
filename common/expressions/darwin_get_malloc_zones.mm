@@ -51,16 +51,18 @@ typedef struct malloc_zone_t {
     struct malloc_introspection_t *introspect;
 } malloc_zone_t;
 
-// Information about memory regions to be returned to LLEF.
-struct malloc_region {
-    uintptr_t lo_addr;
-    uintptr_t hi_addr;
-};
+// All-uint64 => no padding ambiguity between JIT'd struct and struct.unpack
+typedef struct $heap_region { uint64_t lo; uint64_t hi; } $heap_region;
+typedef struct $heap_result {
+    uint64_t count;                        // entries written
+    uint64_t needed;                       // entries seen (needed > count => truncated)
+    uint64_t err;                          // kern_return_t, widened
+    $heap_region regions[MAX_MATCHES];
+} $heap_result;
 
 typedef struct callback_baton_t {
     range_callback_t callback;
-    unsigned int num_matches;
-    malloc_region matches[MAX_MATCHES + 1]; // Null terminate
+    $heap_result out;
 } callback_baton_t;
 
 // Memory read callback function.
@@ -73,15 +75,13 @@ memory_reader_t task_peek = [](unsigned int task, uintptr_t remote_address, uint
 // Callback to populate structure with low, high malloc addresses.
 range_callback_t range_callback = [](unsigned int task, void *baton, unsigned int type, uintptr_t ptr_addr,
                                      uintptr_t ptr_size) -> void {
-    callback_baton_t *lldb_info = (callback_baton_t *)baton;
-    // Upper limit for our array 
-    if (lldb_info->num_matches < MAX_MATCHES) {
-        uintptr_t lo = ptr_addr;
-        uintptr_t hi = lo + ptr_size;
-        lldb_info->matches[lldb_info->num_matches].lo_addr = lo;
-        lldb_info->matches[lldb_info->num_matches].hi_addr = hi;
-        lldb_info->num_matches++;
+    callback_baton_t *info = (callback_baton_t *)baton;
+    if (info->out.count < MAX_MATCHES) {
+        info->out.regions[info->out.count].lo = ptr_addr;
+        info->out.regions[info->out.count].hi = ptr_addr + ptr_size;
+        ++info->out.count;
     }
+    ++info->out.needed;
 };
 
 // Callback function from introspect enumerator function. 
@@ -98,22 +98,16 @@ uintptr_t *zones = 0;
 unsigned int num_zones = 0;
 unsigned int task = 0;
 
-// Populate zones with pointer to a malloc_zone_t array representing heap zones.
-int err = (int)malloc_get_all_zones(task, task_peek, &zones, &num_zones);
+callback_baton_t baton = { range_callback, { 0, 0, 0, {{0, 0}} } };
+baton.out.err = (uint64_t)(kern_return_t)malloc_get_all_zones(task, task_peek, &zones, &num_zones);
 
-// baton struct used to store data on heap regions between callbacks.
-callback_baton_t baton = {range_callback, 0, {0}};
-
-if (KERN_SUCCESS == err) {
-    // Enumerate over all heap zones.
+if (baton.out.err == KERN_SUCCESS) {
     for (unsigned int i = 0; i < num_zones; ++i) {
         const malloc_zone_t *zone = (const malloc_zone_t *)zones[i];
-        /* Introspection API will call our callback for each heap region (rather than each allocation as in
-        * malloc_info) */
         if (zone && zone->introspect)
             zone->introspect->enumerator(task, &baton, MALLOC_PTR_REGION_RANGE_TYPE, (uintptr_t)zone, task_peek,
             range_recorder);
     }
 }
-/* return the value */
-baton.matches
+
+baton.out

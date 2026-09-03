@@ -92,6 +92,16 @@ class LLEFSettings(BaseLLEFSettings, metaclass=Singleton):
         return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "enable_darwin_heap_scan", fallback=False)
 
     @property
+    def dereference_show_heap_boundaries(self) -> bool:
+        return self._RAW_CONFIG.getboolean(self.GLOBAL_SECTION, "dereference_show_heap_boundaries", fallback=False)
+
+    @property
+    def dereference_print(self) -> str:
+        """How the resolved end of a dereference chain is printed: 'symbol', 'pointer' or 'both'."""
+        mode = self._RAW_CONFIG.get(self.GLOBAL_SECTION, "dereference_print", fallback="both").lower()
+        return "both" if mode not in ("symbol", "pointer", "both") else mode
+
+    @property
     def go_support_level(self) -> str:
         support_level = self._RAW_CONFIG.get(self.GLOBAL_SECTION, "go_support_level", fallback="auto").lower()
         return "auto" if support_level not in ("disable", "auto", "force") else support_level

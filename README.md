@@ -75,6 +75,8 @@ Settings are stored in a file `.llef` located in your home directory formatted a
 | show_all_registers      | Boolean | Enable/disable extended register output            |
 | displayed_registers     | List    | Comma separated list of registers to display. Order is preserved. Use `default` as a placeholder for the built-in registers. e.g. `llefsettings set displayed_registers default,ymm0,ymm1` |
 | enable_darwin_heap_scan | Boolean | Enable/disable more accurate heap scanning for Darwin-based platforms. Uses the Darwin malloc introspection API, executing code in the address space of the target application using LLDB's evaluation engine |
+| dereference_show_heap_boundaries | Boolean | Enable/disable heap allocation boundary separators in telescope/dereference (Darwin only, requires enable_darwin_heap_scan) |
+| dereference_print       | String  | How the resolved end of a telescope/dereference chain is printed: `symbol` (symbol/string only), `pointer` (raw pointer only), or `both` (default, e.g. `0x1000004b0 (<breakpoint_here>)`) |
 | max_trace_length        | Int     | Set the maximum length of the call stack backtrace to display                                        |
 | stack_view_size         | Int     | Set the number of entries in the stack read to display                                               |
 | max_disassembly_length  | Int     | Set the maximum number of instructions to disassemble and display around the current PC              |
@@ -149,6 +151,25 @@ e.g.
 0x7fffffffecca│+0002: 0x2d79
 0x7fffffffecc8│+0000: 0x6857
 ```
+
+#### Telescope
+
+Alias for `dereference`. View memory at consecutive addresses, with pointer values colored
+according to the type of memory they point to (code/stack/heap):
+```
+(lldb) telescope address [-l lines]
+```
+Press enter to page forward through memory. The command detects when repeated and automatically advances:
+```
+(lldb) telescope 0x7fffffffecc8 -l 8
+0x7fffffffecc8│+0000: 0x00007ffff7fc3000 -> ...
+0x7fffffffecd0│+0008: 0x0000555555556004 -> ...
+...
+(lldb) [press enter]
+0x7fffffffecd8│+0010: 0x... -> ...
+```
+To show heap allocation boundaries (Darwin only), enable both `enable_darwin_heap_scan` and
+`dereference_show_heap_boundaries` settings.
 
 #### Context
 

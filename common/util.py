@@ -20,7 +20,7 @@ from lldb import (
     SBValue,
     eLanguageTypeObjC_plus_plus,
     eNoDynamicValues,
-    value,
+    eSectionTypeCode,
 )
 
 from common.constants import DEFAULT_TERMINAL_COLUMNS, MAGIC_BYTES, MSG_TYPE, TERM_COLORS
@@ -179,6 +179,22 @@ def is_in_section(address: int, target: SBTarget, target_section_name: str) -> b
     return target_section_name in full_section_name
 
 
+def is_code_section(address: int, target: SBTarget) -> bool:
+    """
+    Determines whether a given memory @address resides in a section that holds executable code.
+
+    This distinguishes genuine code sections (e.g. '__text', '.text') from non-code sections that
+    share an executable segment (e.g. Mach-O '__cstring' / '__const'), which must not be disassembled.
+
+    :param address: The memory address to check.
+    :param target: The target object file.
+    :return: A boolean of the check.
+    """
+    sb_address = target.ResolveLoadAddress(address)
+    section = sb_address.GetSection()
+    return section.IsValid() and section.GetSectionType() == eSectionTypeCode
+
+
 def is_text_region(address: int, target: SBTarget, region: SBMemoryRegionInfo) -> bool:
     """
     Determines if a given memory @address if within a '.text' section of the target executable.
@@ -201,6 +217,20 @@ def is_text_region(address: int, target: SBTarget, region: SBMemoryRegionInfo) -
             in_text = True
 
     return in_text
+
+
+def is_module_image(address: int, target: SBTarget) -> bool:
+    """
+    Determines whether an @address resides in a loaded module image (the main executable or a
+    shared library, any section), as opposed to anonymous mappings such as the stack or heap.
+
+    :param address: The memory address to check.
+    :param target: The target object file.
+    :return: A boolean of the check.
+    """
+    # Module-backed addresses have a real file behind them; anonymous regions do not.
+    module = SBAddress(address, target).GetModule()
+    return module.IsValid() and module.GetFileSpec().GetFilename() is not None
 
 
 def is_code(address: int, process: SBProcess, target: SBTarget, regions: Union[SBMemoryRegionInfoList, None]) -> bool:
@@ -453,44 +483,95 @@ def find_darwin_heap_regions(process: SBProcess) -> Union[list[tuple[int, int]],
 
     MAX_MATCHES = 128
 
-    # Define Objective C++ code to be run as an LLDB expression.
-
-    # Read template file, replace MAX_MATCHES value.
     common_dir = os.path.dirname(os.path.abspath(__file__))
     expr_file_path = os.path.join(common_dir, "expressions", "darwin_get_malloc_zones.mm")
 
     with open(expr_file_path, "r") as expr_file:
         expr = expr_file.read().replace("{{MAX_MATCHES}}", str(MAX_MATCHES))
 
-    # Return SBFrame stack frame object from current thread.
     frame = process.GetSelectedThread().GetSelectedFrame()
 
-    # Set options for evaluating Objective C++ code.
     expr_options = SBExpressionOptions()
     expr_options.SetIgnoreBreakpoints(True)
     expr_options.SetFetchDynamicValue(eNoDynamicValues)
-    # Set a 3 second timeout.
     expr_options.SetTimeoutInMicroSeconds(3 * 1000 * 1000)
     expr_options.SetTryAllThreads(False)
     expr_options.SetLanguage(eLanguageTypeObjC_plus_plus)
+    if hasattr(expr_options, "SetSuppressPersistentResult"):
+        expr_options.SetSuppressPersistentResult(True)
 
     expr_sbvalue = frame.EvaluateExpression(expr, expr_options)
-    match_value = value(expr_sbvalue)
-    heap_regions = []
 
-    # Populate heap regions from expression result.
-    if expr_sbvalue.error.Success():
-        for count in range(MAX_MATCHES):
-            match_entry = match_value[count]
-            lo_addr = match_entry.lo_addr.sbvalue.unsigned
-            hi_addr = match_entry.hi_addr.sbvalue.unsigned
-            if lo_addr != 0:
-                heap_regions.append((lo_addr, hi_addr))
-    else:
-        # Fallback to default way to calculate heap regions in error condition.
+    if not expr_sbvalue.error.Success():
+        return None
+
+    error = SBError()
+    blob = expr_sbvalue.GetData().ReadRawData(error, 0, expr_sbvalue.GetByteSize())
+    if error.Fail():
+        return None
+
+    import struct
+
+    count, needed, kerr = struct.unpack_from("<QQQ", blob, 0)
+    if kerr != 0:
+        return None
+    if needed > count:
+        import logging
+
+        logging.warning("heap region list truncated: %d of %d", count, needed)
+
+    flat = struct.unpack_from("<%dQ" % (count * 2), blob, 24)
+    heap_regions = list(zip(flat[0::2], flat[1::2]))
+
+    if not heap_regions:
         return None
 
     return heap_regions
+
+
+def find_darwin_allocation_sizes(process: SBProcess, base_addr: int, count: int, step: int) -> list[int]:
+    """
+    Return malloc_size for each of `count` addresses starting at @base_addr, advancing by @step.
+
+    :return: A list of `count` sizes, or an empty list on failure.
+    """
+    expr = (
+        f"struct {{ uint64_t n; uint64_t sizes[{count}]; }} result;\n"
+        f"result.n = {count};\n"
+        f"for (uint64_t i = 0; i < {count}; ++i) {{\n"
+        f"    result.sizes[i] = (uint64_t)malloc_size((const void *)({base_addr} + i * {step}));\n"
+        f"}}\n"
+        f"result"
+    )
+
+    frame = process.GetSelectedThread().GetSelectedFrame()
+
+    expr_options = SBExpressionOptions()
+    expr_options.SetIgnoreBreakpoints(True)
+    expr_options.SetFetchDynamicValue(eNoDynamicValues)
+    expr_options.SetTimeoutInMicroSeconds(5 * 1000 * 1000)
+    expr_options.SetTryAllThreads(False)
+    expr_options.SetLanguage(eLanguageTypeObjC_plus_plus)
+    if hasattr(expr_options, "SetSuppressPersistentResult"):
+        expr_options.SetSuppressPersistentResult(True)
+
+    expr_sbvalue = frame.EvaluateExpression(expr, expr_options)
+    if not expr_sbvalue.error.Success():
+        return []
+
+    error = SBError()
+    blob = expr_sbvalue.GetData().ReadRawData(error, 0, expr_sbvalue.GetByteSize())
+    if error.Fail():
+        return []
+
+    import struct
+
+    n = struct.unpack_from("<Q", blob, 0)[0]
+    if n != count:
+        return []
+
+    sizes = list(struct.unpack_from("<%dQ" % count, blob, 8))
+    return sizes
 
 
 def parse_llvm_version_string(version: str) -> Union[list[int], None]:
