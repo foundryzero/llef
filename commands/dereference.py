@@ -20,7 +20,7 @@ from commands.base_command import BaseCommand
 from common.color_settings import LLEFColorSettings
 from common.constants import GLYPHS, MSG_TYPE, TERM_COLORS
 from common.context_handler import ContextHandler
-from common.output_util import color_string, output_line, print_message, print_line
+from common.output_util import color_string, output_line, print_line, print_message
 from common.settings import LLEFSettings
 from common.state import LLEFState
 from common.util import (

@@ -1,11 +1,10 @@
 """Utility functions."""
 
+import logging
 import os
 import re
 import shutil
 import struct
-import logging
-
 from argparse import ArgumentTypeError
 from collections.abc import Callable
 from typing import Any, Union
