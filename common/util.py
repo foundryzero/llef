@@ -3,6 +3,9 @@
 import os
 import re
 import shutil
+import struct
+import logging
+
 from argparse import ArgumentTypeError
 from collections.abc import Callable
 from typing import Any, Union
@@ -486,6 +489,7 @@ def find_darwin_heap_regions(process: SBProcess) -> Union[list[tuple[int, int]],
     common_dir = os.path.dirname(os.path.abspath(__file__))
     expr_file_path = os.path.join(common_dir, "expressions", "darwin_get_malloc_zones.mm")
 
+    # Insert constants into Objective C++ expression.
     with open(expr_file_path, "r") as expr_file:
         expr = expr_file.read().replace("{{MAX_MATCHES}}", str(MAX_MATCHES))
 
@@ -510,17 +514,21 @@ def find_darwin_heap_regions(process: SBProcess) -> Union[list[tuple[int, int]],
     if error.Fail():
         return None
 
-    import struct
-
-    count, needed, kerr = struct.unpack_from("<QQQ", blob, 0)
+    # Read 3 uint64_t values from the C++ expression result
+    entries_written, num_range_callbacks, kerr = struct.unpack_from("<QQQ", blob, 0)
     if kerr != 0:
         return None
-    if needed > count:
-        import logging
 
-        logging.warning("heap region list truncated: %d of %d", count, needed)
+    # If the number of callbacks exceeds the number of entries,
+    # this implies that MAX_MATCHES is too low, and the list of heap zones has been truncated.
+    if num_range_callbacks > entries_written:
+        logging.warning("heap region list truncated: %d of %d", entries_written, num_range_callbacks)
 
-    flat = struct.unpack_from("<%dQ" % (count * 2), blob, 24)
+    heap_data_offset = 24
+    num_addresses = entries_written * 2
+
+    # Extract array of heap region (low, high) addresses from the blob
+    flat = struct.unpack_from(f"<{num_addresses}Q", blob, heap_data_offset)
     heap_regions = list(zip(flat[0::2], flat[1::2]))
 
     if not heap_regions:
@@ -535,14 +543,15 @@ def find_darwin_allocation_sizes(process: SBProcess, base_addr: int, count: int,
 
     :return: A list of `count` sizes, or an empty list on failure.
     """
-    expr = (
-        f"struct {{ uint64_t n; uint64_t sizes[{count}]; }} result;\n"
-        f"result.n = {count};\n"
-        f"for (uint64_t i = 0; i < {count}; ++i) {{\n"
-        f"    result.sizes[i] = (uint64_t)malloc_size((const void *)({base_addr} + i * {step}));\n"
-        f"}}\n"
-        f"result"
-    )
+
+    common_dir = os.path.dirname(os.path.abspath(__file__))
+    expr_file_path = os.path.join(common_dir, "expressions", "darwin_get_malloc_allocation_sizes.mm")
+
+    # Insert constants into Objective C++ expression.
+    with open(expr_file_path, "r") as expr_file:
+        expr = expr_file.read().replace("{{COUNT}}", str(count))
+        expr = expr.replace("{{BASE_ADDR}}", str(base_addr))
+        expr = expr.replace("{{STEP}}", str(step))
 
     frame = process.GetSelectedThread().GetSelectedFrame()
 
@@ -564,12 +573,11 @@ def find_darwin_allocation_sizes(process: SBProcess, base_addr: int, count: int,
     if error.Fail():
         return []
 
-    import struct
-
     n = struct.unpack_from("<Q", blob, 0)[0]
     if n != count:
         return []
 
+    # Extract sizes from returned blob
     sizes = list(struct.unpack_from("<%dQ" % count, blob, 8))
     return sizes
 

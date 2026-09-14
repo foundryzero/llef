@@ -52,10 +52,15 @@ typedef struct malloc_zone_t {
 } malloc_zone_t;
 
 // All-uint64 => no padding ambiguity between JIT'd struct and struct.unpack
-typedef struct $heap_region { uint64_t lo; uint64_t hi; } $heap_region;
+typedef struct $heap_region {
+    uint64_t lo;
+    uint64_t hi;
+} $heap_region;
+
+// This structure stores data which is returned to LLEF
 typedef struct $heap_result {
-    uint64_t count;                        // entries written
-    uint64_t needed;                       // entries seen (needed > count => truncated)
+    uint64_t entries_written;
+    uint64_t num_range_callbacks;
     uint64_t err;                          // kern_return_t, widened
     $heap_region regions[MAX_MATCHES];
 } $heap_result;
@@ -76,12 +81,12 @@ memory_reader_t task_peek = [](unsigned int task, uintptr_t remote_address, uint
 range_callback_t range_callback = [](unsigned int task, void *baton, unsigned int type, uintptr_t ptr_addr,
                                      uintptr_t ptr_size) -> void {
     callback_baton_t *info = (callback_baton_t *)baton;
-    if (info->out.count < MAX_MATCHES) {
-        info->out.regions[info->out.count].lo = ptr_addr;
-        info->out.regions[info->out.count].hi = ptr_addr + ptr_size;
-        ++info->out.count;
+    if (info->out.entries_written < MAX_MATCHES) {
+        info->out.regions[info->out.entries_written].lo = ptr_addr;
+        info->out.regions[info->out.entries_written].hi = ptr_addr + ptr_size;
+        ++info->out.entries_written;
     }
-    ++info->out.needed;
+    ++info->out.num_range_callbacks;
 };
 
 // Callback function from introspect enumerator function. 
@@ -98,16 +103,21 @@ uintptr_t *zones = 0;
 unsigned int num_zones = 0;
 unsigned int task = 0;
 
+// baton struct is populated over each callback.
 callback_baton_t baton = { range_callback, { 0, 0, 0, {{0, 0}} } };
+
+// Populate zones with pointer to a malloc_zone_t array representing heap zones.
 baton.out.err = (uint64_t)(kern_return_t)malloc_get_all_zones(task, task_peek, &zones, &num_zones);
 
 if (baton.out.err == KERN_SUCCESS) {
     for (unsigned int i = 0; i < num_zones; ++i) {
         const malloc_zone_t *zone = (const malloc_zone_t *)zones[i];
+        // Trigger a callback for each heap zone.
         if (zone && zone->introspect)
             zone->introspect->enumerator(task, &baton, MALLOC_PTR_REGION_RANGE_TYPE, (uintptr_t)zone, task_peek,
             range_recorder);
     }
 }
 
+// Return the data to LLEF
 baton.out

@@ -11,7 +11,6 @@ from lldb import (
     SBError,
     SBExecutionContext,
     SBInstruction,
-    SBMemoryRegionInfoList,
     SBProcess,
     SBTarget,
 )
@@ -21,7 +20,7 @@ from commands.base_command import BaseCommand
 from common.color_settings import LLEFColorSettings
 from common.constants import GLYPHS, MSG_TYPE, TERM_COLORS
 from common.context_handler import ContextHandler
-from common.output_util import color_string, output_line, print_message
+from common.output_util import color_string, output_line, print_message, print_line
 from common.settings import LLEFSettings
 from common.state import LLEFState
 from common.util import (
@@ -174,7 +173,6 @@ class DereferenceCommand(BaseCommand):
         data: list[Union[int, str]],
         target: SBTarget,
         process: SBProcess,
-        regions: Union[SBMemoryRegionInfoList, None],
     ) -> None:
         """
         Resolve the last address (second to last in @data list) to a symbol, instruction or
@@ -232,9 +230,7 @@ class DereferenceCommand(BaseCommand):
             pointer_color = self.context_handler.pointer_type_color(last_address)
             data[-1] = f"{color_string(hex_or_str(last_address), pointer_color)} ({annotation})"
 
-    def dereference(
-        self, address: int, target: SBTarget, process: SBProcess, regions: Union[SBMemoryRegionInfoList, None]
-    ) -> list[Union[int, str]]:
+    def dereference(self, address: int, target: SBTarget, process: SBProcess) -> list[Union[int, str]]:
         """
         Dereference a memory @address until it reaches data that cannot be resolved to an address.
         Memory data at the last address is either disassembled to an instruction or converted to a string or neither.
@@ -260,7 +256,7 @@ class DereferenceCommand(BaseCommand):
         if len(data) < 2:
             data.append(color_string("NOT ACCESSIBLE", TERM_COLORS.RED.name))
         else:
-            self.dereference_last_address(data, target, process, regions)
+            self.dereference_last_address(data, target, process)
 
         return data
 
@@ -336,8 +332,6 @@ class DereferenceCommand(BaseCommand):
 
         allocation_map = {}
         if self.settings.dereference_show_heap_boundaries:
-            from common.output_util import print_line
-
             allocation_map = self.context_handler.darwin_allocation_map(start_address, lines, address_size)
 
         end_address = start_address + address_size * lines
@@ -353,7 +347,7 @@ class DereferenceCommand(BaseCommand):
                 first_line = False
 
             offset = address - base
-            deref_result = self.dereference(address, exe_ctx.target, exe_ctx.process, self.context_handler.regions)
+            deref_result = self.dereference(address, exe_ctx.target, exe_ctx.process)
             self.print_dereference_result(deref_result, offset)
 
         DereferenceCommand.last_address = start_address
